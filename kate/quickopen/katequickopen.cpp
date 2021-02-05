@@ -18,6 +18,7 @@
 #include <KAboutData>
 #include <KActionCollection>
 #include <KConfigGroup>
+#include <KFuzzyMatcher>
 #include <KLocalizedString>
 #include <KPluginFactory>
 #include <KSharedConfig>
@@ -63,35 +64,32 @@ protected:
 
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override
     {
-        if (pattern.isEmpty()) {
-            return true;
-        }
         const auto idx = sourceModel()->index(sourceRow, 0, sourceParent);
         const QString fileName = idx.data().toString();
         const auto nameAndPath = fileName.splitRef(QStringLiteral("{[split]}"));
 
         const auto &name = nameAndPath.at(0);
         const auto &path = nameAndPath.at(1);
-        int score = 0;
 
-        bool res = false;
+        KFuzzyMatcher::Result res;
         if (mode == FilterMode::FilterByName) {
-            res = filterByName(name, score);
+            res = filterByName(name);
         } else if (mode == FilterMode::FilterByPath) {
-            res = filterByPath(path, score);
+            res = filterByPath(path);
         } else {
-            int scorep = 0, scoren = 0;
-            bool resp = filterByPath(path, scorep);
-            bool resn = filterByName(name, scoren);
+            KFuzzyMatcher::Result resP = filterByPath(path);
+            KFuzzyMatcher::Result resN = filterByName(name);
 
             // store the score for sorting later
-            score = scoren + scorep;
-            res = resp || resn;
+            res.score = resP.score + resN.score;
+            res.matched = resP.matched || resN.matched;
         }
 
-        sourceModel()->setData(idx, score, KateQuickOpenModel::Score);
+        if (res.matched) {
+            sourceModel()->setData(idx, res.score, KateQuickOpenModel::Score);
+        }
 
-        return res;
+        return res.matched;
     }
 
 public Q_SLOTS:
@@ -103,14 +101,14 @@ public Q_SLOTS:
     }
 
 private:
-    inline bool filterByPath(const QStringRef &path, int &score) const
+    inline KFuzzyMatcher::Result filterByPath(const QStringRef &path) const
     {
-        return kfts::fuzzy_match(pattern, path, score);
+        return KFuzzyMatcher::match(pattern, path);
     }
 
-    inline bool filterByName(const QStringRef &name, int &score) const
+    inline KFuzzyMatcher::Result filterByName(const QStringRef &name) const
     {
-        return kfts::fuzzy_match(pattern, name, score);
+        return KFuzzyMatcher::match(pattern, name);
     }
 
 private:
