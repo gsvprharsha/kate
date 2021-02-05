@@ -230,9 +230,6 @@ KateQuickOpen::KateQuickOpen(KateMainWindow *mainWindow)
     m_model = new QuickOpenFilterProxyModel(this);
     m_model->setFilterRole(Qt::DisplayRole);
     m_model->setSortRole(KateQuickOpenModel::Score);
-    m_model->setFilterCaseSensitivity(Qt::CaseInsensitive);
-    m_model->setSortCaseSensitivity(Qt::CaseInsensitive);
-    m_model->setFilterKeyColumn(Qt::DisplayRole);
 
     m_styleDelegate = new QuickOpenStyleDelegate(this);
     m_listView->setItemDelegate(m_styleDelegate);
