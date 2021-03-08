@@ -49,7 +49,6 @@ public:
     void set_items_cutoff_bug()
     {
         model.clear();
-        auto icon = QIcon::fromTheme(QLatin1String("document-export"));
 
         model.insertDocument(model.rowCount(), addDoc(QStringLiteral("/home/gregor/logs/notifications/multimedia-system.log")));
         model.insertDocument(model.rowCount(), addDoc(QStringLiteral("/home/gregor/dev/src/kservicemenueditor-0.2a/servicemenueditor")));
@@ -80,15 +79,21 @@ TsTestApp::TsTestApp(QWidget *parent)
     l->addLayout(hl);
 
     auto buttonInsert1 = new QPushButton(QStringLiteral("Ins 1 item"), this);
-    connect(buttonInsert1, &QPushButton::clicked, this, [=] { impl_->insert_1_item(); });
+    connect(buttonInsert1, &QPushButton::clicked, this, [=] {
+        impl_->insert_1_item();
+    });
     hl->addWidget(buttonInsert1);
 
     auto buttonRemove1 = new QPushButton(QStringLiteral("Del 1 item"), this);
-    connect(buttonRemove1, &QPushButton::clicked, this, [=] { impl_->remove_1_item(); });
+    connect(buttonRemove1, &QPushButton::clicked, this, [=] {
+        impl_->remove_1_item();
+    });
     hl->addWidget(buttonRemove1);
 
     auto buttonSetTestSet1 = new QPushButton(QStringLiteral("set_items_cutoff_bug"), this);
-    connect(buttonSetTestSet1, &QPushButton::clicked, this, [=] { impl_->set_items_cutoff_bug(); });
+    connect(buttonSetTestSet1, &QPushButton::clicked, this, [=] {
+        impl_->set_items_cutoff_bug();
+    });
     hl->addWidget(buttonSetTestSet1);
 
     impl_->treeview1 = new QTreeView(this);
@@ -96,7 +101,6 @@ TsTestApp::TsTestApp(QWidget *parent)
     impl_->treeview1->setHeaderHidden(true);
     impl_->treeview1->setRootIsDecorated(false);
 
-    auto icon = QIcon::fromTheme(QLatin1String("edit-undo"));
     impl_->model.insertDocument(impl_->model.rowCount(), addDoc(QStringLiteral("/home/gm/projects/proj1/src/file1.h")));
     impl_->model.insertDocument(impl_->model.rowCount(), addDoc(QStringLiteral("/home/gm/projects/proj1/src/file2.cpp")));
     impl_->model.insertDocument(impl_->model.rowCount(), addDoc(QStringLiteral("/home/gm/dev/file3.py")));

@@ -1,7 +1,3 @@
-if(${KF5TextEditor_VERSION} VERSION_LESS "5.63.0")
-    return()
-endif()
-
 find_package(KF5I18n ${KF5_DEP_VERSION} QUIET)
 if(NOT KF5I18n_FOUND)
     return()
@@ -42,7 +38,7 @@ target_sources(
 )
 
 kcoreaddons_desktop_to_json (externaltoolsplugin externaltoolsplugin.desktop)
-install(TARGETS externaltoolsplugin DESTINATION ${PLUGIN_INSTALL_DIR}/ktexteditor )
+install(TARGETS externaltoolsplugin DESTINATION ${KDE_INSTALL_PLUGINDIR}/ktexteditor )
 
 if (BUILD_TESTING)
     add_subdirectory(autotests)

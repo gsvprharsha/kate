@@ -15,15 +15,15 @@
 
 void KatePluginSymbolViewerView::parseXsltSymbols(void)
 {
-    if (!m_mainWindow->activeView())
+    if (!m_mainWindow->activeView()) {
         return;
+    }
 
     m_macro->setText(i18n("Show Params"));
     m_struct->setText(i18n("Show Variables"));
     m_func->setText(i18n("Show Templates"));
 
     QString cl; // Current Line
-    QString stripped;
 
     char comment = 0;
     char templ = 0;
@@ -95,8 +95,9 @@ void KatePluginSymbolViewerView::parseXsltSymbols(void)
             if (m_treeOn->isChecked()) {
                 node = new QTreeWidgetItem(mcrNode, lastMcrNode);
                 lastMcrNode = node;
-            } else
+            } else {
                 node = new QTreeWidgetItem(m_symbols);
+            }
             node->setText(0, stripped);
             node->setIcon(0, QIcon(mcr));
             node->setText(1, QString::number(i, 10));
@@ -109,8 +110,9 @@ void KatePluginSymbolViewerView::parseXsltSymbols(void)
             if (m_treeOn->isChecked()) {
                 node = new QTreeWidgetItem(sctNode, lastSctNode);
                 lastSctNode = node;
-            } else
+            } else {
                 node = new QTreeWidgetItem(m_symbols);
+            }
             node->setText(0, stripped);
             node->setIcon(0, QIcon(sct));
             node->setText(1, QString::number(i, 10));
@@ -123,8 +125,9 @@ void KatePluginSymbolViewerView::parseXsltSymbols(void)
             if (m_treeOn->isChecked()) {
                 node = new QTreeWidgetItem(clsNode, lastClsNode);
                 lastClsNode = node;
-            } else
+            } else {
                 node = new QTreeWidgetItem(m_symbols);
+            }
             node->setText(0, stripped);
             node->setIcon(0, QIcon(cls_int));
             node->setText(1, QString::number(i, 10));
@@ -137,8 +140,9 @@ void KatePluginSymbolViewerView::parseXsltSymbols(void)
             if (m_treeOn->isChecked()) {
                 node = new QTreeWidgetItem(clsNode, lastClsNode);
                 lastClsNode = node;
-            } else
+            } else {
                 node = new QTreeWidgetItem(m_symbols);
+            }
             node->setText(0, stripped);
             node->setIcon(0, QIcon(cls));
             node->setText(1, QString::number(i, 10));

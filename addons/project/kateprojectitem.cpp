@@ -12,17 +12,18 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QIcon>
+#include <QMessageBox>
 #include <QMimeDatabase>
 #include <QThread>
 
 #include <KIconUtils>
+#include <KLocalizedString>
 
 #include <KTextEditor/Document>
 
 KateProjectItem::KateProjectItem(Type type, const QString &text)
     : QStandardItem(text)
     , m_type(type)
-    , m_icon(nullptr)
 {
 }
 
@@ -78,7 +79,24 @@ QVariant KateProjectItem::data(int role) const
         return QVariant(*icon());
     }
 
+    if (role == TypeRole) {
+        return QVariant(m_type);
+    }
+
     return QStandardItem::data(role);
+}
+
+bool KateProjectItem::operator<(const QStandardItem &other) const
+{
+    // let directories stay first
+    const auto thisType = data(TypeRole).toInt();
+    const auto otherType = other.data(TypeRole).toInt();
+    if (thisType != otherType) {
+        return thisType < otherType;
+    }
+
+    // case-insensitive compare of the filename
+    return data(Qt::DisplayRole).toString().compare(other.data(Qt::DisplayRole).toString(), Qt::CaseInsensitive) < 0;
 }
 
 QIcon *KateProjectItem::icon() const
@@ -88,6 +106,7 @@ QIcon *KateProjectItem::icon() const
     }
 
     switch (m_type) {
+    case LinkedProject:
     case Project:
         m_icon = new QIcon(QIcon::fromTheme(QStringLiteral("folder-documents")));
         break;
@@ -97,16 +116,48 @@ QIcon *KateProjectItem::icon() const
         break;
 
     case File: {
-        QString iconName = QMimeDatabase().mimeTypeForUrl(QUrl::fromLocalFile(data(Qt::UserRole).toString())).iconName();
-        QStringList emblems;
+        // ensure we have no empty icons, that breaks layout in tree views
+        QIcon icon = QIcon::fromTheme(QMimeDatabase().mimeTypeForUrl(QUrl::fromLocalFile(data(Qt::UserRole).toString())).iconName());
+        if (icon.isNull()) {
+            icon = QIcon::fromTheme(QStringLiteral("unknown"));
+        }
         if (!m_emblem.isEmpty()) {
-            m_icon = new QIcon(KIconUtils::addOverlay(QIcon::fromTheme(iconName), QIcon(m_emblem), Qt::TopLeftCorner));
+            m_icon = new QIcon(KIconUtils::addOverlay(icon, QIcon(m_emblem), Qt::TopLeftCorner));
         } else {
-            m_icon = new QIcon(QIcon::fromTheme(iconName));
+            m_icon = new QIcon(icon);
         }
         break;
     }
     }
 
     return m_icon;
+}
+
+void KateProjectItem::setData(const QVariant &value, int role)
+{
+    if (role == Qt::EditRole) {
+        auto newFileName = value.toString();
+        if (newFileName.isEmpty())
+            return;
+
+        auto oldFileName = data(Qt::DisplayRole).toString();
+        auto oldName = data(Qt::UserRole).toString();
+        QString newName = oldName;
+        newName.replace(oldFileName, newFileName);
+
+        if (oldName == newName) {
+            return;
+        }
+
+        if (!QFile::rename(oldName, newName)) {
+            QMessageBox::critical(nullptr, i18n("Error"), i18n("File name already exists"));
+            return;
+        }
+
+        // change internal path
+        setData(oldName, Qt::UserRole);
+        setData(oldName, Qt::ToolTipRole);
+    }
+
+    QStandardItem::setData(value, role);
 }

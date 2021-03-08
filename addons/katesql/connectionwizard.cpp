@@ -58,16 +58,18 @@ void ConnectionDriverPage::initializePage()
     ConnectionWizard *wiz = static_cast<ConnectionWizard *>(wizard());
     Connection *c = wiz->connection();
 
-    if (!c->driver.isEmpty())
+    if (!c->driver.isEmpty()) {
         driverComboBox->setCurrentItem(c->driver);
+    }
 }
 
 int ConnectionDriverPage::nextId() const
 {
-    if (driverComboBox->currentText().contains(QLatin1String("QSQLITE")))
+    if (driverComboBox->currentText().contains(QLatin1String("QSQLITE"))) {
         return ConnectionWizard::Page_SQLite_Server;
-    else
+    } else {
         return ConnectionWizard::Page_Standard_Server;
+    }
 }
 
 ConnectionStandardServerPage::ConnectionStandardServerPage(QWidget *parent)
@@ -164,7 +166,8 @@ ConnectionSQLiteServerPage::ConnectionSQLiteServerPage(QWidget *parent)
     : QWizardPage(parent)
 {
     setTitle(i18nc("@title Wizard page title", "Connection Parameters"));
-    setSubTitle(i18nc("@title Wizard page subtitle", "Please enter the SQLite database file path.\nIf the file does not exist, a new database will be created."));
+    setSubTitle(
+        i18nc("@title Wizard page subtitle", "Please enter the SQLite database file path.\nIf the file does not exist, a new database will be created."));
 
     QFormLayout *layout = new QFormLayout();
 
@@ -249,13 +252,19 @@ void ConnectionSavePage::initializePage()
         /// TODO: use db file basename
         name = QStringLiteral("SQLite");
 
-        for (int i = 1; QSqlDatabase::contains(name); i++)
+        for (int i = 1; QSqlDatabase::contains(name); i++) {
             name = QStringLiteral("%1%2").arg(QLatin1String("SQLite")).arg(i);
+        }
     } else {
         name = QStringLiteral("%1 on %2").arg(field(QStringLiteral("database")).toString()).arg(field(QStringLiteral("hostname")).toString()).simplified();
 
-        for (int i = 1; QSqlDatabase::contains(name); i++)
-            name = QStringLiteral("%1 on %2 (%3)").arg(field(QStringLiteral("database")).toString()).arg(field(QStringLiteral("hostname")).toString()).arg(i).simplified();
+        for (int i = 1; QSqlDatabase::contains(name); i++) {
+            name = QStringLiteral("%1 on %2 (%3)")
+                       .arg(field(QStringLiteral("database")).toString())
+                       .arg(field(QStringLiteral("hostname")).toString())
+                       .arg(i)
+                       .simplified();
+        }
     }
 
     connectionNameLineEdit->setText(name);

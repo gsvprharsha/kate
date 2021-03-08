@@ -16,13 +16,15 @@
 #include <ktexteditor/document.h>
 #include <ktexteditor/view.h>
 
-#include <kwidgetsaddons_version.h>
 #include <KActionCollection>
 #include <KActionMenu>
+#include <KApplicationTrader>
 #include <KConfigGroup>
 #include <KDirOperator>
 #include <KFilePlacesModel>
 #include <KHistoryComboBox>
+#include <KIO/ApplicationLauncherJob>
+#include <KIO/JobUiDelegate>
 #include <KLocalizedString>
 #include <KMessageBox>
 #include <KSharedConfig>
@@ -35,17 +37,6 @@
 #include <QLineEdit>
 #include <QStyle>
 #include <QVBoxLayout>
-
-#include <kio_version.h>
-#if KIO_VERSION < QT_VERSION_CHECK(5, 71, 0)
-#   include <KOpenWithDialog>
-#   include <KRun>
-#else
-#   include <KIO/ApplicationLauncherJob>
-#   include <KIO/JobUiDelegate>
-#endif
-#include <KApplicationTrader>
-
 
 // END Includes
 
@@ -108,7 +99,10 @@ KateFileBrowser::KateFileBrowser(KTextEditor::MainWindow *mainWindow, QWidget *p
 
     connect(m_filter, &KHistoryComboBox::editTextChanged, this, &KateFileBrowser::slotFilterChange);
     connect(m_filter, static_cast<void (KHistoryComboBox::*)(const QString &)>(&KHistoryComboBox::returnPressed), m_filter, &KHistoryComboBox::addToHistory);
-    connect(m_filter, static_cast<void (KHistoryComboBox::*)(const QString &)>(&KHistoryComboBox::returnPressed), m_dirOperator, static_cast<void (KDirOperator::*)()>(&KDirOperator::setFocus));
+    connect(m_filter,
+            static_cast<void (KHistoryComboBox::*)(const QString &)>(&KHistoryComboBox::returnPressed),
+            m_dirOperator,
+            static_cast<void (KDirOperator::*)()>(&KDirOperator::setFocus));
     connect(m_dirOperator, &KDirOperator::urlEntered, this, &KateFileBrowser::updateUrlNavigator);
 
     // Connect the bookmark handler
@@ -132,8 +126,10 @@ void KateFileBrowser::setupToolbar()
 {
     KConfigGroup config(KSharedConfig::openConfig(), "filebrowser");
     QStringList actions = config.readEntry("toolbar actions", QStringList());
-    if (actions.isEmpty()) // default toolbar
-        actions << QStringLiteral("back") << QStringLiteral("forward") << QStringLiteral("bookmarks") << QStringLiteral("sync_dir") << QStringLiteral("configure");
+    if (actions.isEmpty()) { // default toolbar
+        actions << QStringLiteral("back") << QStringLiteral("forward") << QStringLiteral("bookmarks") << QStringLiteral("sync_dir")
+                << QStringLiteral("configure");
+    }
 
     // remove all actions from the toolbar (there should be none)
     m_toolbar->clear();
@@ -141,15 +137,18 @@ void KateFileBrowser::setupToolbar()
     // now add all actions to the toolbar
     for (const QString &it : qAsConst(actions)) {
         QAction *ac = nullptr;
-        if (it.isEmpty())
+        if (it.isEmpty()) {
             continue;
-        if (it == QLatin1String("bookmarks") || it == QLatin1String("sync_dir") || it == QLatin1String("configure"))
+        }
+        if (it == QLatin1String("bookmarks") || it == QLatin1String("sync_dir") || it == QLatin1String("configure")) {
             ac = actionCollection()->action(it);
-        else
+        } else {
             ac = m_dirOperator->actionCollection()->action(it);
+        }
 
-        if (ac)
+        if (ac) {
             m_toolbar->addAction(ac);
+        }
     }
 }
 
@@ -193,8 +192,9 @@ void KateFileBrowser::slotFilterChange(const QString &nf)
 
 bool kateFileSelectorIsReadable(const QUrl &url)
 {
-    if (!url.isLocalFile())
+    if (!url.isLocalFile()) {
         return true; // what else can we say?
+    }
 
     QDir dir(url.toLocalFile());
     return dir.exists();
@@ -204,14 +204,16 @@ void KateFileBrowser::setDir(const QUrl &u)
 {
     QUrl newurl;
 
-    if (!u.isValid())
+    if (!u.isValid()) {
         newurl = QUrl::fromLocalFile(QDir::homePath());
-    else
+    } else {
         newurl = u;
+    }
 
     QString path(newurl.path());
-    if (!path.endsWith(QLatin1Char('/')))
+    if (!path.endsWith(QLatin1Char('/'))) {
         path += QLatin1Char('/');
+    }
     newurl.setPath(path);
 
     if (!kateFileSelectorIsReadable(newurl)) {
@@ -228,7 +230,7 @@ void KateFileBrowser::setDir(const QUrl &u)
 
 void KateFileBrowser::contextMenuAboutToShow(const KFileItem &item, QMenu *menu)
 {
-    if(m_openWithMenu == nullptr) {
+    if (m_openWithMenu == nullptr) {
         m_openWithMenu = new KateFileBrowserOpenWithMenu(i18nc("@action:inmenu", "Open With"), this);
         menu->insertMenu(menu->actions().at(1), m_openWithMenu);
         menu->insertSeparator(menu->actions().at(2));
@@ -259,7 +261,6 @@ void KateFileBrowser::fixOpenWithMenu()
     // append "Other..." to call the KDE "open with" dialog.
     a = menu->addAction(i18n("&Other..."));
     a->setData(QVariant(QList<QString>({QString(), menu->item().url().toString()})));
-
 }
 
 void KateFileBrowser::openWithMenuAction(QAction *a)
@@ -268,31 +269,12 @@ void KateFileBrowser::openWithMenuAction(QAction *a)
     const QString fileName = a->data().toStringList().last();
     const QList<QUrl> list({QUrl(fileName)});
 
-#if KIO_VERSION < QT_VERSION_CHECK(5, 71, 0)
-    if (application.isEmpty()) {
-        // display "open with" dialog
-        KOpenWithDialog dlg(list);
-        if (dlg.exec()) {
-            KRun::runService(*dlg.service(), list, this);
-        }
-        return;
-    }
-
-    KService::Ptr app = KService::serviceByDesktopPath(application);
-    if (app) {
-        KRun::runService(*app, list, this);
-    } else {
-        KMessageBox::error(this, i18n("Application '%1' not found.", application), i18n("Application not found"));
-    }
-#else
     KService::Ptr app = KService::serviceByDesktopPath(application);
     // If app is null, ApplicationLauncherJob will invoke the open-with dialog
     auto *job = new KIO::ApplicationLauncherJob(app);
     job->setUrls(list);
     job->setUiDelegate(new KIO::JobUiDelegate(KJobUiDelegate::AutoHandlingEnabled, this));
     job->start();
-#endif
-
 }
 // END Public Slots
 
@@ -308,8 +290,11 @@ void KateFileBrowser::openSelectedFiles()
     const KFileItemList list = m_dirOperator->selectedItems();
 
     if (list.count() > 20) {
-        if (KMessageBox::questionYesNo(this, i18np("You are trying to open 1 file, are you sure?", "You are trying to open %1 files, are you sure?", list.count())) == KMessageBox::No)
+        if (KMessageBox::questionYesNo(this,
+                                       i18np("You are trying to open 1 file, are you sure?", "You are trying to open %1 files, are you sure?", list.count()))
+            == KMessageBox::No) {
             return;
+        }
     }
 
     for (const KFileItem &item : list) {
@@ -332,8 +317,9 @@ void KateFileBrowser::updateUrlNavigator(const QUrl &u)
 void KateFileBrowser::setActiveDocumentDir()
 {
     QUrl u = activeDocumentUrl();
-    if (!u.isEmpty())
+    if (!u.isEmpty()) {
         setDir(KIO::upUrl(u));
+    }
 }
 
 void KateFileBrowser::autoSyncFolder()
@@ -355,8 +341,9 @@ void KateFileBrowser::selectorViewChanged(QAbstractItemView *newView)
 QUrl KateFileBrowser::activeDocumentUrl()
 {
     KTextEditor::View *v = m_mainWindow->activeView();
-    if (v)
+    if (v) {
         return v->document()->url();
+    }
     return QUrl();
 }
 
@@ -364,11 +351,7 @@ void KateFileBrowser::setupActions()
 {
     // bookmarks action!
     KActionMenu *acmBookmarks = new KActionMenu(QIcon::fromTheme(QStringLiteral("bookmarks")), i18n("Bookmarks"), this);
-#if KWIDGETSADDONS_VERSION >= QT_VERSION_CHECK(5, 77, 0)
     acmBookmarks->setPopupMode(QToolButton::InstantPopup);
-#else
-    acmBookmarks->setDelayed(false);
-#endif
     m_bookmarkHandler = new KateBookmarkHandler(this, acmBookmarks->menu());
     acmBookmarks->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 
@@ -384,11 +367,7 @@ void KateFileBrowser::setupActions()
 
     // section for settings menu
     KActionMenu *optionsMenu = new KActionMenu(QIcon::fromTheme(QStringLiteral("configure")), i18n("Options"), this);
-#if KWIDGETSADDONS_VERSION >= QT_VERSION_CHECK(5, 77, 0)
     optionsMenu->setPopupMode(QToolButton::InstantPopup);
-#else
-    optionsMenu->setDelayed(false);
-#endif
     optionsMenu->addAction(m_dirOperator->actionCollection()->action(QStringLiteral("short view")));
     optionsMenu->addAction(m_dirOperator->actionCollection()->action(QStringLiteral("detailed view")));
     optionsMenu->addAction(m_dirOperator->actionCollection()->action(QStringLiteral("tree view")));

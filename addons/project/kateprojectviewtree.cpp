@@ -6,9 +6,9 @@
  */
 
 #include "kateprojectviewtree.h"
+#include "kateprojectfiltermodel.h"
 #include "kateprojectpluginview.h"
 #include "kateprojecttreeviewcontextmenu.h"
-#include "kateprojectfiltermodel.h"
 
 #include <ktexteditor/document.h>
 #include <ktexteditor/view.h>
@@ -93,6 +93,13 @@ void KateProjectViewTree::openSelectedDocument()
     }
 
     /**
+     * we only handle files here!
+     */
+    if (selecteStuff[0].data(KateProjectItem::TypeRole).toInt() != KateProjectItem::File) {
+        return;
+    }
+
+    /**
      * open document for first element, if possible
      */
     QString filePath = selecteStuff[0].data(Qt::UserRole).toString();
@@ -106,10 +113,24 @@ void KateProjectViewTree::slotClicked(const QModelIndex &index)
     /**
      * open document, if any usable user data
      */
-    QString filePath = index.data(Qt::UserRole).toString();
+    const QString filePath = index.data(Qt::UserRole).toString();
     if (!filePath.isEmpty()) {
-        m_pluginView->mainWindow()->openUrl(QUrl::fromLocalFile(filePath));
-        selectionModel()->setCurrentIndex(index, QItemSelectionModel::Clear | QItemSelectionModel::Select);
+        /**
+         * normal file? => just trigger open of it
+         */
+        if (index.data(KateProjectItem::TypeRole).toInt() == KateProjectItem::File) {
+            m_pluginView->mainWindow()->openUrl(QUrl::fromLocalFile(filePath));
+            selectionModel()->setCurrentIndex(index, QItemSelectionModel::Clear | QItemSelectionModel::Select);
+            return;
+        }
+
+        /**
+         * linked project? => switch the current active project
+         */
+        if (index.data(KateProjectItem::TypeRole).toInt() == KateProjectItem::LinkedProject) {
+            m_pluginView->switchToProject(QDir(filePath));
+            return;
+        }
     }
 }
 
@@ -138,7 +159,8 @@ void KateProjectViewTree::contextMenuEvent(QContextMenuEvent *event)
     }
 
     KateProjectTreeViewContextMenu menu;
-    menu.exec(filePath, viewport()->mapToGlobal(event->pos()), this);
+    connect(&menu, &KateProjectTreeViewContextMenu::showFileHistory, this, &KateProjectViewTree::showFileHistory);
+    menu.exec(filePath, index, viewport()->mapToGlobal(event->pos()), this);
 
     event->accept();
 }

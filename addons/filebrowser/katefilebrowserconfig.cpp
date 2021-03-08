@@ -95,8 +95,9 @@ QIcon KateFileBrowserConfigPage::icon() const
 
 void KateFileBrowserConfigPage::apply()
 {
-    if (!m_changed)
+    if (!m_changed) {
         return;
+    }
 
     m_changed = false;
 
@@ -125,27 +126,28 @@ void KateFileBrowserConfigPage::init()
     KConfigGroup config(KSharedConfig::openConfig(), "filebrowser");
     // toolbar
     QStringList l = config.readEntry("toolbar actions", QStringList());
-    if (l.isEmpty()) // default toolbar
+    if (l.isEmpty()) { // default toolbar
         l << QStringLiteral("back") << QStringLiteral("forward") << QStringLiteral("bookmarks") << QStringLiteral("sync_dir") << QStringLiteral("configure");
+    }
 
     // actions from diroperator + two of our own
-    const QStringList allActions {QStringLiteral("up"),
-                                  QStringLiteral("back"),
-                                  QStringLiteral("forward"),
-                                  QStringLiteral("home"),
-                                  QStringLiteral("reload"),
-                                  QStringLiteral("mkdir"),
-                                  QStringLiteral("delete"),
-                                  QStringLiteral("short view"),
-                                  QStringLiteral("detailed view"),
-                                  QStringLiteral("tree view"),
-                                  QStringLiteral("detailed tree view"),
-                                  QStringLiteral("show hidden"),
-                                  // QStringLiteral("view menu"),
-                                  // QStringLiteral("properties"),
-                                  QStringLiteral("bookmarks"),
-                                  QStringLiteral("sync_dir"),
-                                  QStringLiteral("configure")};
+    const QStringList allActions{QStringLiteral("up"),
+                                 QStringLiteral("back"),
+                                 QStringLiteral("forward"),
+                                 QStringLiteral("home"),
+                                 QStringLiteral("reload"),
+                                 QStringLiteral("mkdir"),
+                                 QStringLiteral("delete"),
+                                 QStringLiteral("short view"),
+                                 QStringLiteral("detailed view"),
+                                 QStringLiteral("tree view"),
+                                 QStringLiteral("detailed tree view"),
+                                 QStringLiteral("show hidden"),
+                                 // QStringLiteral("view menu"),
+                                 // QStringLiteral("properties"),
+                                 QStringLiteral("bookmarks"),
+                                 QStringLiteral("sync_dir"),
+                                 QStringLiteral("configure")};
 
     QRegularExpression re(QStringLiteral("&(?=[^&])"));
     QAction *ac = nullptr;
@@ -153,10 +155,11 @@ void KateFileBrowserConfigPage::init()
     for (const auto &actionName : allActions) {
         lb = l.contains(actionName) ? acSel->selectedListWidget() : acSel->availableListWidget();
 
-        if (actionName == QLatin1String("bookmarks") || actionName == QLatin1String("sync_dir") || actionName == QLatin1String("configure"))
+        if (actionName == QLatin1String("bookmarks") || actionName == QLatin1String("sync_dir") || actionName == QLatin1String("configure")) {
             ac = fileBrowser->actionCollection()->action(actionName);
-        else
+        } else {
             ac = fileBrowser->dirOperator()->actionCollection()->action(actionName);
+        }
 
         if (ac) {
             QString text = ac->text().remove(re);
@@ -174,7 +177,7 @@ void KateFileBrowserConfigPage::init()
 void KateFileBrowserConfigPage::slotMyChanged()
 {
     m_changed = true;
-    emit changed();
+    Q_EMIT changed();
 }
 // END KateFileBrowserConfigPage
 

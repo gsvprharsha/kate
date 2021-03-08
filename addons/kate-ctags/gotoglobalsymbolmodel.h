@@ -15,14 +15,13 @@ class GotoGlobalSymbolModel : public QAbstractTableModel
 {
     Q_OBJECT
 public:
-
     enum Roles {
         Name = Qt::UserRole,
         Pattern,
-        FileUrl
+        FileUrl,
     };
 
-    explicit GotoGlobalSymbolModel(QObject* parent = nullptr);
+    explicit GotoGlobalSymbolModel(QObject *parent = nullptr);
 
     int columnCount(const QModelIndex &parent = QModelIndex()) const override;
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;

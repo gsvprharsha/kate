@@ -10,6 +10,7 @@
 
 #include <QDir>
 #include <QFileSystemWatcher>
+#include <QThreadPool>
 
 #include <KTextEditor/Plugin>
 #include <ktexteditor/document.h>
@@ -20,10 +21,12 @@
 #include "kateproject.h"
 #include "kateprojectcompletion.h"
 
-namespace ThreadWeaver
-{
-class Queue;
-}
+enum class ClickAction : uint8_t {
+    NoAction = 0,
+    ShowDiff,
+    OpenFile,
+    StageUnstage,
+};
 
 class KateProjectPlugin : public KTextEditor::Plugin
 {
@@ -106,6 +109,15 @@ public:
     bool multiProjectCompletion() const;
     bool multiProjectGoto() const;
 
+    void setGitStatusShowNumStat(bool show);
+    bool showGitStatusWithNumStat();
+
+    void setSingleClickAction(ClickAction cb);
+    ClickAction singleClickAcion();
+
+    void setDoubleClickAction(ClickAction cb);
+    ClickAction doubleClickAcion();
+
 Q_SIGNALS:
     /**
      * Signal that a new project got created.
@@ -117,6 +129,13 @@ Q_SIGNALS:
      * Signal that plugin configuration changed
      */
     void configUpdated();
+
+    /**
+     * Signal for outgoing message, the host application will handle them!
+     * Will be handled in all open main windows.
+     * @param message outgoing message we send to the host application
+     */
+    void message(const QVariantMap &message);
 
 public Q_SLOTS:
     /**
@@ -176,15 +195,28 @@ private:
      */
     KateProjectCompletion m_completion;
 
-    bool m_autoGit : 1;
-    bool m_autoSubversion : 1;
-    bool m_autoMercurial : 1;
-    bool m_indexEnabled : 1;
-    bool m_multiProjectCompletion : 1;
-    bool m_multiProjectGoto : 1;
+    // auto discovery on per default
+    bool m_autoGit = true;
+    bool m_autoSubversion = true;
+    bool m_autoMercurial = true;
+
+    // indexing is expensive, default off
+    bool m_indexEnabled = false;
     QUrl m_indexDirectory;
 
-    ThreadWeaver::Queue *m_weaver;
+    // some more features default off, too
+    bool m_multiProjectCompletion = false;
+    bool m_multiProjectGoto = false;
+
+    // git features
+    bool m_gitNumStat = true;
+    ClickAction m_singleClickAction = ClickAction::ShowDiff;
+    ClickAction m_doubleClickAction = ClickAction::StageUnstage;
+
+    /**
+     * thread pool for our workers
+     */
+    QThreadPool m_threadPool;
 };
 
 #endif

@@ -47,6 +47,27 @@ KateViewSpace::KateViewSpace(KateViewManager *viewManager, QWidget *parent, cons
     hLayout->setSpacing(0);
     hLayout->setContentsMargins(0, 0, 0, 0);
 
+    // add left <-> right history buttons
+    m_historyBack = new QToolButton(this);
+    auto hlAct = m_viewManager->mainWindow()->actionCollection()->action(QStringLiteral("view_history_back"));
+    m_historyBack->setDefaultAction(hlAct);
+    m_historyBack->setToolTip(hlAct->text());
+    m_historyBack->setIcon(hlAct->icon());
+    m_historyBack->setAutoRaise(true);
+    KAcceleratorManager::setNoAccel(m_historyBack);
+    m_historyBack->installEventFilter(this); // on click, active this view space
+    hLayout->addWidget(m_historyBack);
+
+    m_historyForward = new QToolButton(this);
+    auto hrAct = m_viewManager->mainWindow()->actionCollection()->action(QStringLiteral("view_history_forward"));
+    m_historyForward->setDefaultAction(hrAct);
+    m_historyForward->setIcon(hrAct->icon());
+    m_historyForward->setToolTip(hrAct->text());
+    m_historyForward->setAutoRaise(true);
+    KAcceleratorManager::setNoAccel(m_historyForward);
+    m_historyForward->installEventFilter(this); // on click, active this view space
+    hLayout->addWidget(m_historyForward);
+
     // add tab bar
     m_tabBar = new KateTabBar(this);
     connect(m_tabBar, &KateTabBar::currentChanged, this, &KateViewSpace::changeView);
@@ -63,7 +84,7 @@ KateViewSpace::KateViewSpace(KateViewManager *viewManager, QWidget *parent, cons
     m_quickOpen->installEventFilter(this); // on click, active this view space
     hLayout->addWidget(m_quickOpen);
 
-    // forward tab bar quick open action to globa quick open action
+    // forward tab bar quick open action to global quick open action
     QAction *bridge = new QAction(QIcon::fromTheme(QStringLiteral("tab-duplicate")), i18nc("indicator for more documents", "+%1", 100), this);
     m_quickOpen->setDefaultAction(bridge);
     QAction *quickOpen = m_viewManager->mainWindow()->actionCollection()->action(QStringLiteral("view_quick_open"));
@@ -122,10 +143,11 @@ bool KateViewSpace::eventFilter(QObject *obj, QEvent *event)
     if (button == m_quickOpen && event->type() == QEvent::WhatsThis) {
         QHelpEvent *e = static_cast<QHelpEvent *>(event);
         const int hiddenDocs = hiddenDocuments();
-        QString helpText = (hiddenDocs == 0) ? i18n("Click here to switch to the Quick Open view.")
-                                             : i18np("Currently, there is one more document open. To see all open documents, switch to the Quick Open view by clicking here.",
-                                                     "Currently, there are %1 more documents open. To see all open documents, switch to the Quick Open view by clicking here.",
-                                                     hiddenDocs);
+        QString helpText = (hiddenDocs == 0)
+            ? i18n("Click here to switch to the Quick Open view.")
+            : i18np("Currently, there is one more document open. To see all open documents, switch to the Quick Open view by clicking here.",
+                    "Currently, there are %1 more documents open. To see all open documents, switch to the Quick Open view by clicking here.",
+                    hiddenDocs);
         QWhatsThis::showText(e->globalPos(), helpText, m_quickOpen);
         return true;
     }
@@ -151,6 +173,8 @@ void KateViewSpace::statusBarToggled()
 void KateViewSpace::tabBarToggled()
 {
     KateUpdateDisabler updatesDisabled(m_viewManager->mainWindow());
+    m_historyBack->setVisible(m_viewManager->mainWindow()->showTabBar());
+    m_historyForward->setVisible(m_viewManager->mainWindow()->showTabBar());
     m_tabBar->setVisible(m_viewManager->mainWindow()->showTabBar());
     m_split->setVisible(m_viewManager->mainWindow()->showTabBar());
     m_quickOpen->setVisible(m_viewManager->mainWindow()->showTabBar());
@@ -491,7 +515,9 @@ void KateViewSpace::showContextMenu(int idx, const QPoint &globalPos)
         mCompareWithActive->setEnabled(false);
     }
 
-    auto activeDocument = KTextEditor::Editor::instance()->application()->activeMainWindow()->activeView()->document(); // used for mCompareWithActive which is used with another tab which is not active
+    auto activeDocument =
+        KTextEditor::Editor::instance()->application()->activeMainWindow()->activeView()->document(); // used for mCompareWithActive which is used with another
+                                                                                                      // tab which is not active
     // both documents must have urls and must not be the same to have the compare feature enabled
     if (activeDocument->url().isEmpty() || activeDocument == doc) {
         mCompareWithActive->setEnabled(false);
@@ -527,7 +553,10 @@ void KateViewSpace::showContextMenu(int idx, const QPoint &globalPos)
     } else if (choice->parent() == mCompareWithActive) {
         QString actionData = choice->data().toString(); // name of the executable of the diff program
         if (!KateFileActions::compareWithExternalProgram(activeDocument, doc, actionData)) {
-            QMessageBox::information(this, i18n("Could not start program"), i18n("The selected program could not be started. Maybe it is not installed."), QMessageBox::StandardButton::Ok);
+            QMessageBox::information(this,
+                                     i18n("Could not start program"),
+                                     i18n("The selected program could not be started. Maybe it is not installed."),
+                                     QMessageBox::StandardButton::Ok);
         }
     }
 }
@@ -574,6 +603,15 @@ void KateViewSpace::saveConfig(KConfigBase *config, int myIndex, const QString &
 void KateViewSpace::restoreConfig(KateViewManager *viewMan, const KConfigBase *config, const QString &groupname)
 {
     KConfigGroup group(config, groupname);
+
+    // workaround for the weird bug where the tabbar sometimes becomes invisible after opening a session via the session chooser dialog or the --start cmd
+    // option
+    // TODO: Debug the actual reason for the bug. See https://invent.kde.org/utilities/kate/-/merge_requests/189
+    m_tabBar->hide();
+    m_tabBar->show();
+
+    // set back bar status to configured variant
+    tabBarToggled();
 
     // restore Document lru list so that all tabs from the last session reappear
     const QStringList lruList = group.readEntry("Documents", QStringList());

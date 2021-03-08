@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
 
     SPDX-License-Identifier: MIT
@@ -8,7 +7,6 @@
 #ifndef LSPCLIENTCONFIGPAGE_H
 #define LSPCLIENTCONFIGPAGE_H
 
-#include <KSyntaxHighlighting/Repository>
 #include <KTextEditor/ConfigPage>
 
 class LSPClientPlugin;
@@ -36,6 +34,7 @@ public Q_SLOTS:
     void reset() override;
     void configTextChanged();
     void configUrlChanged();
+    void updateHighlighters();
 
 private:
     void readUserConfig(const QString &fileName);
@@ -43,7 +42,6 @@ private:
 
     Ui::LspConfigWidget *ui;
     LSPClientPlugin *m_plugin;
-    KSyntaxHighlighting::Repository m_repository;
 };
 
 #endif

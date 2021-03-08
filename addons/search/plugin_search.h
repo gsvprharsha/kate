@@ -1,19 +1,8 @@
-/*   Kate search plugin
- *
- * SPDX-FileCopyrightText: 2011-2021 Kåre Särs <kare.sars@iki.fi>
- *
- * SPDX-License-Identifier: LGPL-2.0-or-later
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program in a file called COPYING; if not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA 02110-1301, USA.
- */
+/*
+    SPDX-FileCopyrightText: 2011-21 Kåre Särs <kare.sars@iki.fi>
+
+    SPDX-License-Identifier: LGPL-2.0-or-later
+*/
 
 #ifndef _PLUGIN_SEARCH_H_
 #define _PLUGIN_SEARCH_H_
@@ -26,16 +15,17 @@
 #include <ktexteditor/mainwindow.h>
 #include <ktexteditor/sessionconfiginterface.h>
 
+#include <QThreadPool>
 #include <QTimer>
-#include <QTreeWidget>
+#include <QTreeView>
 
 #include <KXMLGUIClient>
 
 #include "ui_results.h"
 #include "ui_search.h"
 
-#include "MatchModel.h"
 #include "FolderFilesList.h"
+#include "MatchModel.h"
 #include "SearchDiskFiles.h"
 #include "search_open_files.h"
 
@@ -60,6 +50,9 @@ public:
     int searchPlaceIndex = 0;
     QString treeRootText;
     MatchModel matchModel;
+
+Q_SIGNALS:
+    void colorsChanged();
 };
 
 // This class keeps the focus inside the S&R plugin when pressing tab/shift+tab by overriding focusNextPrevChild()
@@ -175,27 +168,39 @@ protected:
     bool eventFilter(QObject *obj, QEvent *ev) override;
 
 private:
-    QStringList filterFiles(const QStringList &files) const;
-    void updateSearchColors();
+    QStringList filterFiles(const QStringList &fileList) const;
+    void startDiskFileSearch(const QStringList &fileList, const QRegularExpression &reg, bool includeBinaryFiles);
+    void cancelDiskFileSearch();
+    bool searchingDiskFiles();
+
+    void updateViewColors();
 
     void onResize(const QSize &size);
 
-    Ui::SearchDialog m_ui {};
+    Ui::SearchDialog m_ui{};
     QWidget *m_toolView;
     KTextEditor::Application *m_kateApp;
     SearchOpenFiles m_searchOpenFiles;
     FolderFilesList m_folderFilesList;
-    SearchDiskFiles m_searchDiskFiles;
+
+    /**
+     * worklist for runnables, must survive thread pool below!
+     */
+    SearchDiskFilesWorkList m_worklistForDiskFiles;
+
+    /**
+     * threadpool for multi-threaded disk search
+     */
+    QThreadPool m_searchDiskFilePool;
+
+    QTimer m_diskSearchDoneTimer;
     QAction *m_matchCase = nullptr;
     QAction *m_useRegExp = nullptr;
     Results *m_curResults = nullptr;
     bool m_searchJustOpened = false;
     int m_projectSearchPlaceIndex = 0;
-    bool m_searchDiskFilesDone = true;
-    bool m_searchOpenFilesDone = true;
     bool m_isSearchAsYouType = false;
     bool m_isVerticalLayout = false;
-    bool m_blockDiskMatchFound = false;
     QString m_resultBaseDir;
     QVector<KTextEditor::MovingRange *> m_matchRanges;
     QTimer m_changeTimer;

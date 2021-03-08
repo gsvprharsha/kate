@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
 
     SPDX-License-Identifier: MIT
@@ -19,25 +18,25 @@
 #include <QDir>
 #include <QStandardPaths>
 
-static const QString CONFIG_LSPCLIENT {QStringLiteral("lspclient")};
-static const QString CONFIG_SYMBOL_DETAILS {QStringLiteral("SymbolDetails")};
-static const QString CONFIG_SYMBOL_TREE {QStringLiteral("SymbolTree")};
-static const QString CONFIG_SYMBOL_EXPAND {QStringLiteral("SymbolExpand")};
-static const QString CONFIG_SYMBOL_SORT {QStringLiteral("SymbolSort")};
-static const QString CONFIG_COMPLETION_DOC {QStringLiteral("CompletionDocumentation")};
-static const QString CONFIG_REFERENCES_DECLARATION {QStringLiteral("ReferencesDeclaration")};
-static const QString CONFIG_AUTO_HOVER {QStringLiteral("AutoHover")};
-static const QString CONFIG_TYPE_FORMATTING {QStringLiteral("TypeFormatting")};
-static const QString CONFIG_INCREMENTAL_SYNC {QStringLiteral("IncrementalSync")};
-static const QString CONFIG_DIAGNOSTICS {QStringLiteral("Diagnostics")};
-static const QString CONFIG_DIAGNOSTICS_HIGHLIGHT {QStringLiteral("DiagnosticsHighlight")};
-static const QString CONFIG_DIAGNOSTICS_MARK {QStringLiteral("DiagnosticsMark")};
-static const QString CONFIG_DIAGNOSTICS_HOVER {QStringLiteral("DiagnosticsHover")};
-static const QString CONFIG_DIAGNOSTICS_SIZE {QStringLiteral("DiagnosticsSize")};
-static const QString CONFIG_MESSAGES {QStringLiteral("Messages")};
-static const QString CONFIG_MESSAGES_AUTO_SWITCH {QStringLiteral("MessagesAutoSwitch")};
-static const QString CONFIG_SERVER_CONFIG {QStringLiteral("ServerConfiguration")};
-static const QString CONFIG_SEMANTIC_HIGHLIGHTING {QStringLiteral("SemanticHighlighting")};
+static const QString CONFIG_LSPCLIENT{QStringLiteral("lspclient")};
+static const QString CONFIG_SYMBOL_DETAILS{QStringLiteral("SymbolDetails")};
+static const QString CONFIG_SYMBOL_TREE{QStringLiteral("SymbolTree")};
+static const QString CONFIG_SYMBOL_EXPAND{QStringLiteral("SymbolExpand")};
+static const QString CONFIG_SYMBOL_SORT{QStringLiteral("SymbolSort")};
+static const QString CONFIG_COMPLETION_DOC{QStringLiteral("CompletionDocumentation")};
+static const QString CONFIG_REFERENCES_DECLARATION{QStringLiteral("ReferencesDeclaration")};
+static const QString CONFIG_AUTO_HOVER{QStringLiteral("AutoHover")};
+static const QString CONFIG_TYPE_FORMATTING{QStringLiteral("TypeFormatting")};
+static const QString CONFIG_INCREMENTAL_SYNC{QStringLiteral("IncrementalSync")};
+static const QString CONFIG_DIAGNOSTICS{QStringLiteral("Diagnostics")};
+static const QString CONFIG_DIAGNOSTICS_HIGHLIGHT{QStringLiteral("DiagnosticsHighlight")};
+static const QString CONFIG_DIAGNOSTICS_MARK{QStringLiteral("DiagnosticsMark")};
+static const QString CONFIG_DIAGNOSTICS_HOVER{QStringLiteral("DiagnosticsHover")};
+static const QString CONFIG_DIAGNOSTICS_SIZE{QStringLiteral("DiagnosticsSize")};
+static const QString CONFIG_MESSAGES{QStringLiteral("Messages")};
+static const QString CONFIG_SERVER_CONFIG{QStringLiteral("ServerConfiguration")};
+static const QString CONFIG_SEMANTIC_HIGHLIGHTING{QStringLiteral("SemanticHighlighting")};
+static const QString CONFIG_SIGNATURE_HELP{QStringLiteral("SignatureHelp")};
 
 K_PLUGIN_FACTORY_WITH_JSON(LSPClientPluginFactory, "lspclientplugin.json", registerPlugin<LSPClientPlugin>();)
 
@@ -104,11 +103,11 @@ void LSPClientPlugin::readConfig()
     m_diagnosticsHover = config.readEntry(CONFIG_DIAGNOSTICS_HOVER, true);
     m_diagnosticsSize = config.readEntry(CONFIG_DIAGNOSTICS_SIZE, 1024);
     m_messages = config.readEntry(CONFIG_MESSAGES, true);
-    m_messagesAutoSwitch = config.readEntry(CONFIG_MESSAGES_AUTO_SWITCH, 1);
     m_configPath = config.readEntry(CONFIG_SERVER_CONFIG, QUrl());
     m_semanticHighlighting = config.readEntry(CONFIG_SEMANTIC_HIGHLIGHTING, false);
+    m_signatureHelp = config.readEntry(CONFIG_SIGNATURE_HELP, true);
 
-    emit update();
+    Q_EMIT update();
 }
 
 void LSPClientPlugin::writeConfig() const
@@ -129,11 +128,11 @@ void LSPClientPlugin::writeConfig() const
     config.writeEntry(CONFIG_DIAGNOSTICS_HOVER, m_diagnosticsHover);
     config.writeEntry(CONFIG_DIAGNOSTICS_SIZE, m_diagnosticsSize);
     config.writeEntry(CONFIG_MESSAGES, m_messages);
-    config.writeEntry(CONFIG_MESSAGES_AUTO_SWITCH, m_messagesAutoSwitch);
     config.writeEntry(CONFIG_SERVER_CONFIG, m_configPath);
     config.writeEntry(CONFIG_SEMANTIC_HIGHLIGHTING, m_semanticHighlighting);
+    config.writeEntry(CONFIG_SIGNATURE_HELP, m_signatureHelp);
 
-    emit update();
+    Q_EMIT update();
 }
 
 #include "lspclientplugin.moc"

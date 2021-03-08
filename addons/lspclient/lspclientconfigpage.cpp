@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
 
     SPDX-License-Identifier: MIT
@@ -12,8 +11,11 @@
 #include <KLocalizedString>
 
 #include <KSyntaxHighlighting/Definition>
+#include <KSyntaxHighlighting/Repository>
 #include <KSyntaxHighlighting/SyntaxHighlighter>
 #include <KSyntaxHighlighting/Theme>
+
+#include <KTextEditor/Editor>
 
 #include <QJsonDocument>
 #include <QJsonParseError>
@@ -27,24 +29,11 @@ LSPClientConfigPage::LSPClientConfigPage(QWidget *parent, LSPClientPlugin *plugi
     ui->setupUi(this);
 
     // fix-up our two text edits to be proper JSON file editors
-    for (auto textEdit : {ui->userConfig, static_cast<QTextEdit *>(ui->defaultConfig)}) {
-        // setup JSON highlighter for the default json stuff
-        auto highlighter = new KSyntaxHighlighting::SyntaxHighlighter(textEdit->document());
-        highlighter->setDefinition(m_repository.definitionForFileName(QStringLiteral("settings.json")));
+    updateHighlighters();
 
-        // we want mono-spaced font
-        textEdit->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-
-        // we want to have the proper theme for the current palette
-        const auto theme = (palette().color(QPalette::Base).lightness() < 128) ? m_repository.defaultTheme(KSyntaxHighlighting::Repository::DarkTheme) : m_repository.defaultTheme(KSyntaxHighlighting::Repository::LightTheme);
-        auto pal = qApp->palette();
-        if (theme.isValid()) {
-            pal.setColor(QPalette::Base, theme.editorColor(KSyntaxHighlighting::Theme::BackgroundColor));
-            pal.setColor(QPalette::Highlight, theme.editorColor(KSyntaxHighlighting::Theme::TextSelection));
-        }
-        textEdit->setPalette(pal);
-        highlighter->setTheme(theme);
-    }
+    // ensure we update the highlighters if the repository is updated or theme is changed
+    connect(KTextEditor::Editor::instance(), &KTextEditor::Editor::repositoryReloaded, this, &LSPClientConfigPage::updateHighlighters);
+    connect(KTextEditor::Editor::instance(), &KTextEditor::Editor::configChanged, this, &LSPClientConfigPage::updateHighlighters);
 
     // setup default json settings
     QFile defaultConfigFile(QStringLiteral(":/lspclient/settings.json"));
@@ -70,10 +59,13 @@ LSPClientConfigPage::LSPClientConfigPage(QWidget *parent, LSPClientPlugin *plugi
                            ui->chkOnTypeFormatting,
                            ui->chkIncrementalSync,
                            ui->chkSemanticHighlighting,
-                           ui->chkAutoHover})
+                           ui->chkAutoHover,
+                           ui->chkSignatureHelp}) {
         connect(cb, &QCheckBox::toggled, this, &LSPClientConfigPage::changed);
-    auto ch = [this](int) { this->changed(); };
-    connect(ui->comboMessagesSwitch, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, ch);
+    }
+    auto ch = [this](int) {
+        this->changed();
+    };
     connect(ui->spinDiagnosticsSize, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, ch);
     connect(ui->edtConfigPath, &KUrlRequester::textChanged, this, &LSPClientConfigPage::configUrlChanged);
     connect(ui->edtConfigPath, &KUrlRequester::urlSelected, this, &LSPClientConfigPage::configUrlChanged);
@@ -82,8 +74,9 @@ LSPClientConfigPage::LSPClientConfigPage(QWidget *parent, LSPClientPlugin *plugi
         Q_UNUSED(position);
         // discard format change
         // (e.g. due to syntax highlighting)
-        if (added || removed)
+        if (added || removed) {
             configTextChanged();
+        }
     };
     connect(ui->userConfig->document(), &QTextDocument::contentsChange, this, cfgh);
 
@@ -96,7 +89,6 @@ LSPClientConfigPage::LSPClientConfigPage(QWidget *parent, LSPClientPlugin *plugi
         enabled = enabled && ui->chkDiagnosticsHover->isChecked();
         ui->spinDiagnosticsSize->setEnabled(enabled);
         enabled = ui->chkMessages->isChecked();
-        ui->comboMessagesSwitch->setEnabled(enabled);
     };
     connect(this, &LSPClientConfigPage::changed, this, h);
 }
@@ -141,9 +133,9 @@ void LSPClientConfigPage::apply()
     m_plugin->m_onTypeFormatting = ui->chkOnTypeFormatting->isChecked();
     m_plugin->m_incrementalSync = ui->chkIncrementalSync->isChecked();
     m_plugin->m_semanticHighlighting = ui->chkSemanticHighlighting->isChecked();
+    m_plugin->m_signatureHelp = ui->chkSignatureHelp->isChecked();
 
     m_plugin->m_messages = ui->chkMessages->isChecked();
-    m_plugin->m_messagesAutoSwitch = ui->comboMessagesSwitch->currentIndex();
 
     m_plugin->m_configPath = ui->edtConfigPath->url();
 
@@ -179,9 +171,9 @@ void LSPClientConfigPage::reset()
     ui->chkOnTypeFormatting->setChecked(m_plugin->m_onTypeFormatting);
     ui->chkIncrementalSync->setChecked(m_plugin->m_incrementalSync);
     ui->chkSemanticHighlighting->setChecked(m_plugin->m_semanticHighlighting);
+    ui->chkSignatureHelp->setChecked(m_plugin->m_signatureHelp);
 
     ui->chkMessages->setChecked(m_plugin->m_messages);
-    ui->comboMessagesSwitch->setCurrentIndex(m_plugin->m_messagesAutoSwitch);
 
     ui->edtConfigPath->setUrl(m_plugin->m_configPath);
 
@@ -215,7 +207,7 @@ void LSPClientConfigPage::updateConfigTextErrorState()
     }
 
     // check json validity
-    QJsonParseError error {};
+    QJsonParseError error{};
     auto json = QJsonDocument::fromJson(data, &error);
     if (error.error == QJsonParseError::NoError) {
         if (json.isObject()) {
@@ -244,4 +236,25 @@ void LSPClientConfigPage::configUrlChanged()
 
     // remember changed
     changed();
+}
+
+void LSPClientConfigPage::updateHighlighters()
+{
+    for (auto textEdit : {ui->userConfig, static_cast<QTextEdit *>(ui->defaultConfig)}) {
+        // setup JSON highlighter for the default json stuff
+        auto highlighter = new KSyntaxHighlighting::SyntaxHighlighter(textEdit->document());
+        highlighter->setDefinition(KTextEditor::Editor::instance()->repository().definitionForFileName(QStringLiteral("settings.json")));
+
+        // we want mono-spaced font
+        textEdit->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+
+        // we want to have the proper theme for the current palette
+        const auto theme = KTextEditor::Editor::instance()->theme();
+        auto pal = qApp->palette();
+        pal.setColor(QPalette::Base, QColor::fromRgba(theme.editorColor(KSyntaxHighlighting::Theme::BackgroundColor)));
+        pal.setColor(QPalette::Highlight, QColor::fromRgba(theme.editorColor(KSyntaxHighlighting::Theme::TextSelection)));
+        textEdit->setPalette(pal);
+        highlighter->setTheme(theme);
+        highlighter->rehighlight();
+    }
 }

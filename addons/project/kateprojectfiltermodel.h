@@ -9,20 +9,20 @@
 #ifndef KATEPROJECTFILTERMODEL_H
 #define KATEPROJECTFILTERMODEL_H
 
-#include <QSortFilterProxyModel>
 #include <QDebug>
+#include <QSortFilterProxyModel>
 
 #include <kfts_fuzzy_match.h>
 
 class KateProjectFilterProxyModel : public QSortFilterProxyModel
 {
-
 public:
-    KateProjectFilterProxyModel(QObject* parent = nullptr) :
-        QSortFilterProxyModel(parent)
-    {}
+    KateProjectFilterProxyModel(QObject *parent = nullptr)
+        : QSortFilterProxyModel(parent)
+    {
+    }
 
-    void setFilterString(const QString& string)
+    void setFilterString(const QString &string)
     {
         m_pattern = string;
         invalidateFilter();
@@ -31,8 +31,9 @@ public:
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override
     {
-        if (m_pattern.isEmpty())
+        if (m_pattern.isEmpty()) {
             return true;
+        }
 
         int score = 0; // unused intentionally
         QString file = sourceModel()->index(sourceRow, 0, sourceParent).data().toString();

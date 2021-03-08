@@ -26,8 +26,14 @@ class KateProjectItem : public QStandardItem
 public:
     /**
      * Possible Types
+     * We start with 1 to have 0 as invalid value!
      */
-    enum Type { Project, Directory, File };
+    enum Type { LinkedProject = 1, Project = 2, Directory = 3, File = 4 };
+
+    /**
+     * Our defined roles
+     */
+    enum Role { TypeRole = Qt::UserRole + 42 };
 
     /**
      * construct new item with given text
@@ -47,6 +53,14 @@ public:
      * @return data for role
      */
     QVariant data(int role = Qt::UserRole + 1) const override;
+    void setData(const QVariant &value, int role) override;
+
+    /**
+     * We want case-insensitive sorting and directories first!
+     * @param other other element to compare with
+     * @return is this element less than?
+     */
+    bool operator<(const QStandardItem &other) const override;
 
 public:
     void slotModifiedChanged(KTextEditor::Document *);
@@ -64,7 +78,7 @@ private:
     /**
      * cached icon
      */
-    mutable QIcon *m_icon;
+    mutable QIcon *m_icon = nullptr;
 
     /**
      * for document icons

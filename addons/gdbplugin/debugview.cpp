@@ -50,7 +50,7 @@ void DebugView::runDebugger(const GDBTargetConf &conf, const QStringList &ioFifo
     }
     m_targetConf = conf;
     if (ioFifos.size() == 3) {
-        m_ioPipeString = QStringLiteral("< %1 1> %2 2> %3").arg(ioFifos[0]).arg(ioFifos[1]).arg(ioFifos[2]);
+        m_ioPipeString = QStringLiteral("< %1 1> %2 2> %3").arg(ioFifos[0], ioFifos[1], ioFifos[2]);
     }
 
     if (m_state == none) {
@@ -79,7 +79,7 @@ void DebugView::runDebugger(const GDBTargetConf &conf, const QStringList &ioFifo
         QTimer::singleShot(0, this, &DebugView::issueNextCommand);
     }
     m_nextCommands << QStringLiteral("file \"%1\"").arg(m_targetConf.executable);
-    m_nextCommands << QStringLiteral("set args %1 %2").arg(m_targetConf.arguments).arg(m_ioPipeString);
+    m_nextCommands << QStringLiteral("set args %1 %2").arg(m_targetConf.arguments, m_ioPipeString);
     m_nextCommands << QStringLiteral("set inferior-tty /dev/null");
     m_nextCommands << m_targetConf.customInit;
     m_nextCommands << QStringLiteral("(Q) info breakpoints");
@@ -130,8 +130,9 @@ void DebugView::slotReadDebugStdOut()
     // handle one line at a time
     do {
         end = m_outBuffer.indexOf(QLatin1Char('\n'));
-        if (end < 0)
+        if (end < 0) {
             break;
+        }
         processLine(m_outBuffer.mid(0, end));
         m_outBuffer.remove(0, end + 1);
     } while (1);
@@ -149,8 +150,9 @@ void DebugView::slotReadDebugStdErr()
     // add whole lines at a time to the error list
     do {
         end = m_errBuffer.indexOf(QLatin1Char('\n'));
-        if (end < 0)
+        if (end < 0) {
             break;
+        }
         m_errorList << m_errBuffer.mid(0, end);
         m_errBuffer.remove(0, end + 1);
     } while (1);
@@ -161,20 +163,20 @@ void DebugView::slotReadDebugStdErr()
 void DebugView::slotDebugFinished(int /*exitCode*/, QProcess::ExitStatus status)
 {
     if (status != QProcess::NormalExit) {
-        emit outputText(i18n("*** gdb exited normally ***") + QLatin1Char('\n'));
+        Q_EMIT outputText(i18n("*** gdb exited normally ***") + QLatin1Char('\n'));
     }
 
     m_state = none;
-    emit readyForInput(false);
+    Q_EMIT readyForInput(false);
 
     // remove all old breakpoints
     BreakPoint bPoint;
     while (!m_breakPointList.empty()) {
         bPoint = m_breakPointList.takeFirst();
-        emit breakPointCleared(bPoint.file, bPoint.line - 1);
+        Q_EMIT breakPointCleared(bPoint.file, bPoint.line - 1);
     }
 
-    emit gdbEnded();
+    Q_EMIT gdbEnded();
 }
 
 void DebugView::movePC(QUrl const &url, int line)
@@ -254,7 +256,8 @@ static const QRegularExpression breakpointList(QStringLiteral("\\ANum\\s+Type\\s
 static const QRegularExpression breakpointListed(QStringLiteral("\\A(\\d)\\s+breakpoint\\s+keep\\sy\\s+0x[\\da-f]+\\sin\\s.+\\sat\\s([^:]+):(\\d+).*\\z"));
 static const QRegularExpression stackFrameAny(QStringLiteral("\\A#(\\d+)\\s(.*)\\z"));
 static const QRegularExpression stackFrameFile(QStringLiteral("\\A#(\\d+)\\s+(?:0x[\\da-f]+\\s*in\\s)*(\\S+)(\\s\\(.*\\)) at ([^:]+):(\\d+).*\\z"));
-static const QRegularExpression changeFile(QStringLiteral("\\A(?:(?:Temporary\\sbreakpoint|Breakpoint)\\s*\\d+,\\s*|0x[\\da-f]+\\s*in\\s*)?[^\\s]+\\s*\\([^)]*\\)\\s*at\\s*([^:]+):(\\d+).*\\z"));
+static const QRegularExpression changeFile(
+    QStringLiteral("\\A(?:(?:Temporary\\sbreakpoint|Breakpoint)\\s*\\d+,\\s*|0x[\\da-f]+\\s*in\\s*)?[^\\s]+\\s*\\([^)]*\\)\\s*at\\s*([^:]+):(\\d+).*\\z"));
 static const QRegularExpression changeLine(QStringLiteral("\\A(\\d+)\\s+.*\\z"));
 static const QRegularExpression breakPointReg(QStringLiteral("\\ABreakpoint\\s+(\\d+)\\s+at\\s+0x[\\da-f]+:\\s+file\\s+([^\\,]+)\\,\\s+line\\s+(\\d+).*\\z"));
 static const QRegularExpression breakPointMultiReg(QStringLiteral("\\ABreakpoint\\s+(\\d+)\\s+at\\s+0x[\\da-f]+:\\s+([^\\,]+):(\\d+).*\\z"));
@@ -264,8 +267,9 @@ static const QRegularExpression threadLine(QStringLiteral("\\A\\**\\s+(\\d+)\\s+
 
 void DebugView::processLine(QString line)
 {
-    if (line.isEmpty())
+    if (line.isEmpty()) {
         return;
+    }
 
     static QRegularExpressionMatch match;
     switch (m_state) {
@@ -280,14 +284,14 @@ void DebugView::processLine(QString line)
     case executingCmd:
         if (breakpointList.match(line).hasMatch()) {
             m_state = listingBreakpoints;
-            emit clearBreakpointMarks();
+            Q_EMIT clearBreakpointMarks();
             m_breakPointList.clear();
         } else if (line.contains(QLatin1String("No breakpoints or watchpoints."))) {
-            emit clearBreakpointMarks();
+            Q_EMIT clearBreakpointMarks();
             m_breakPointList.clear();
         } else if ((match = stackFrameAny.match(line)).hasMatch()) {
             if (m_lastCommand.contains(QLatin1String("info stack"))) {
-                emit stackFrameInfo(match.captured(1), match.captured(2));
+                Q_EMIT stackFrameInfo(match.captured(1), match.captured(2));
             } else {
                 m_subState = (m_subState == normal) ? stackFrameSeen : stackTraceSeen;
 
@@ -303,7 +307,7 @@ void DebugView::processLine(QString line)
 
             if (!m_nextCommands.contains(QLatin1String("continue"))) {
                 // GDB uses 1 based line numbers, kate uses 0 based...
-                emit debugLocationChanged(resolveFileName(m_currentFile), lineNum - 1);
+                Q_EMIT debugLocationChanged(resolveFileName(m_currentFile), lineNum - 1);
             }
             m_debugLocationChanged = true;
         } else if ((match = changeLine.match(line)).hasMatch()) {
@@ -314,7 +318,7 @@ void DebugView::processLine(QString line)
             }
             if (!m_nextCommands.contains(QLatin1String("continue"))) {
                 // GDB uses 1 based line numbers, kate uses 0 based...
-                emit debugLocationChanged(resolveFileName(m_currentFile), lineNum - 1);
+                Q_EMIT debugLocationChanged(resolveFileName(m_currentFile), lineNum - 1);
             }
             m_debugLocationChanged = true;
         } else if ((match = breakPointReg.match(line)).hasMatch()) {
@@ -323,14 +327,14 @@ void DebugView::processLine(QString line)
             breakPoint.file = resolveFileName(match.captured(2));
             breakPoint.line = match.captured(3).toInt();
             m_breakPointList << breakPoint;
-            emit breakPointSet(breakPoint.file, breakPoint.line - 1);
+            Q_EMIT breakPointSet(breakPoint.file, breakPoint.line - 1);
         } else if ((match = breakPointMultiReg.match(line)).hasMatch()) {
             BreakPoint breakPoint;
             breakPoint.number = match.captured(1).toInt();
             breakPoint.file = resolveFileName(match.captured(2));
             breakPoint.line = match.captured(3).toInt();
             m_breakPointList << breakPoint;
-            emit breakPointSet(breakPoint.file, breakPoint.line - 1);
+            Q_EMIT breakPointSet(breakPoint.file, breakPoint.line - 1);
         } else if (breakPointDel.match(line).hasMatch()) {
             line.remove(QStringLiteral("Deleted breakpoint"));
             line.remove(QLatin1Char('s')); // in case of multiple breakpoints
@@ -342,23 +346,24 @@ void DebugView::processLine(QString line)
             for (int i = 0; i < numbers.size(); i++) {
                 for (int j = 0; j < m_breakPointList.size(); j++) {
                     if (numbers[i].toInt() == m_breakPointList[j].number) {
-                        emit breakPointCleared(m_breakPointList[j].file, m_breakPointList[j].line - 1);
+                        Q_EMIT breakPointCleared(m_breakPointList[j].file, m_breakPointList[j].line - 1);
                         m_breakPointList.removeAt(j);
                         break;
                     }
                 }
             }
-        } else if (exitProgram.match(line).hasMatch() || line.contains(QLatin1String("The program no longer exists")) || line.contains(QLatin1String("Kill the program being debugged"))) {
+        } else if (exitProgram.match(line).hasMatch() || line.contains(QLatin1String("The program no longer exists"))
+                   || line.contains(QLatin1String("Kill the program being debugged"))) {
             // if there are still commands to execute remove them to remove unneeded output
             // except  if the "kill was for "re-run"
             if ((!m_nextCommands.empty()) && !m_nextCommands[0].contains(QLatin1String("file"))) {
                 m_nextCommands.clear();
             }
             m_debugLocationChanged = false; // do not insert (Q) commands
-            emit programEnded();
+            Q_EMIT programEnded();
         } else if (PromptStr == line) {
             if (m_subState == stackFrameSeen) {
-                emit stackFrameChanged(m_newFrameLevel);
+                Q_EMIT stackFrameChanged(m_newFrameLevel);
             }
             m_state = ready;
 
@@ -374,7 +379,7 @@ void DebugView::processLine(QString line)
             breakPoint.file = resolveFileName(match.captured(2));
             breakPoint.line = match.captured(3).toInt();
             m_breakPointList << breakPoint;
-            emit breakPointSet(breakPoint.file, breakPoint.line - 1);
+            Q_EMIT breakPointSet(breakPoint.file, breakPoint.line - 1);
         } else if (PromptStr == line) {
             m_state = ready;
             QTimer::singleShot(0, this, &DebugView::issueNextCommand);
@@ -385,7 +390,7 @@ void DebugView::processLine(QString line)
             m_state = ready;
             QTimer::singleShot(0, this, &DebugView::issueNextCommand);
         } else {
-            emit infoLocal(line);
+            Q_EMIT infoLocal(line);
         }
         break;
     case printThis:
@@ -393,25 +398,25 @@ void DebugView::processLine(QString line)
             m_state = ready;
             QTimer::singleShot(0, this, &DebugView::issueNextCommand);
         } else {
-            emit infoLocal(line);
+            Q_EMIT infoLocal(line);
         }
         break;
     case infoLocals:
         if (PromptStr == line) {
             m_state = ready;
-            emit infoLocal(QString());
+            Q_EMIT infoLocal(QString());
             QTimer::singleShot(0, this, &DebugView::issueNextCommand);
         } else {
-            emit infoLocal(line);
+            Q_EMIT infoLocal(line);
         }
         break;
     case infoStack:
         if (PromptStr == line) {
             m_state = ready;
-            emit stackFrameInfo(QString(), QString());
+            Q_EMIT stackFrameInfo(QString(), QString());
             QTimer::singleShot(0, this, &DebugView::issueNextCommand);
         } else if ((match = stackFrameAny.match(line)).hasMatch()) {
-            emit stackFrameInfo(match.captured(1), match.captured(2));
+            Q_EMIT stackFrameInfo(match.captured(1), match.captured(2));
         }
         break;
     case infoThreads:
@@ -419,7 +424,7 @@ void DebugView::processLine(QString line)
             m_state = ready;
             QTimer::singleShot(0, this, &DebugView::issueNextCommand);
         } else if ((match = threadLine.match(line)).hasMatch()) {
-            emit threadInfo(match.captured(1).toInt(), (line[0] == QLatin1Char('*')));
+            Q_EMIT threadInfo(match.captured(1).toInt(), (line[0] == QLatin1Char('*')));
         }
         break;
     }
@@ -463,23 +468,23 @@ void DebugView::processErrors()
         } else if (error.contains(QLatin1String("No line ")) || error.contains(QLatin1String("No source file named"))) {
             // setting a breakpoint failed. Do not continue.
             m_nextCommands.clear();
-            emit readyForInput(true);
+            Q_EMIT readyForInput(true);
         } else if (error.contains(QLatin1String("No stack"))) {
             m_nextCommands.clear();
-            emit programEnded();
+            Q_EMIT programEnded();
         }
 
         if ((m_lastCommand == QLatin1String("(Q)print *this")) && error.contains(QLatin1String("No symbol \"this\" in current context."))) {
             continue;
         }
-        emit outputError(error + QLatin1Char('\n'));
+        Q_EMIT outputError(error + QLatin1Char('\n'));
     }
 }
 
 void DebugView::issueCommand(QString const &cmd)
 {
     if (m_state == ready) {
-        emit readyForInput(false);
+        Q_EMIT readyForInput(false);
         m_state = executingCmd;
         if (cmd == QLatin1String("(Q)info locals")) {
             m_state = infoLocals;
@@ -490,7 +495,7 @@ void DebugView::issueCommand(QString const &cmd)
         } else if (cmd == QLatin1String("(Q)info stack")) {
             m_state = infoStack;
         } else if (cmd == QLatin1String("(Q)info thread")) {
-            emit threadInfo(-1, false);
+            Q_EMIT threadInfo(-1, false);
             m_state = infoThreads;
         }
         m_subState = normal;
@@ -499,7 +504,7 @@ void DebugView::issueCommand(QString const &cmd)
         if (cmd.startsWith(QLatin1String("(Q)"))) {
             m_debugProcess.write(qPrintable(cmd.mid(3)));
         } else {
-            emit outputText(QStringLiteral("(gdb) ") + cmd + QLatin1Char('\n'));
+            Q_EMIT outputText(QStringLiteral("(gdb) ") + cmd + QLatin1Char('\n'));
             m_debugProcess.write(qPrintable(cmd));
         }
         m_debugProcess.write("\n");
@@ -528,7 +533,7 @@ void DebugView::issueNextCommand()
                     return;
                 }
             }
-            emit readyForInput(true);
+            Q_EMIT readyForInput(true);
         }
     }
 }
@@ -566,14 +571,14 @@ QUrl DebugView::resolveFileName(const QString &fileName)
     }
 
     // we can not do anything just return the fileName
-    emit sourceFileNotFound(fileName);
+    Q_EMIT sourceFileNotFound(fileName);
     return QUrl::fromUserInput(fileName);
 }
 
 void DebugView::outputTextMaybe(const QString &text)
 {
     if (!m_lastCommand.startsWith(QLatin1String("(Q)")) && !text.contains(PromptStr)) {
-        emit outputText(text + QLatin1Char('\n'));
+        Q_EMIT outputText(text + QLatin1Char('\n'));
     }
 }
 

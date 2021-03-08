@@ -11,6 +11,7 @@
 #include "kateapp.h"
 #include "katedebug.h"
 #include "katemainwindow.h"
+#include "kateoutputview.h"
 
 #include <KConfig>
 #include <KConfigGroup>
@@ -19,6 +20,7 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QMetaObject>
 
 #include <ktexteditor/sessionconfiginterface.h>
 
@@ -29,8 +31,9 @@ QString KatePluginInfo::saveName() const
 
 bool KatePluginInfo::operator<(const KatePluginInfo &other) const
 {
-    if (sortOrder != other.sortOrder)
+    if (sortOrder != other.sortOrder) {
         return sortOrder < other.sortOrder;
+    }
 
     return saveName() < other.saveName();
 }
@@ -49,7 +52,7 @@ KatePluginManager::~KatePluginManager()
 void KatePluginManager::setupPluginList()
 {
     // activate a hand-picked list of plugins per default, give them a hand-picked sort order for loading
-    const QMap<QString, int> defaultPlugins {
+    const QMap<QString, int> defaultPlugins{
         {QStringLiteral("katefiletreeplugin"), -1000},
         {QStringLiteral("katesearchplugin"), -900},
         {QStringLiteral("kateprojectplugin"), -800},
@@ -67,14 +70,18 @@ void KatePluginManager::setupPluginList()
     // handle all install KTextEditor plugins
     m_pluginList.clear();
     QSet<QString> unique;
-    const QVector<KPluginMetaData> plugins = KPluginLoader::findPlugins(QStringLiteral("ktexteditor"), [](const KPluginMetaData &md) { return md.serviceTypes().contains(QLatin1String("KTextEditor/Plugin")); });
+
+    const QVector<KPluginMetaData> plugins = KPluginLoader::findPlugins(QStringLiteral("ktexteditor"), [](const KPluginMetaData &md) {
+        return md.serviceTypes().contains(QLatin1String("KTextEditor/Plugin"));
+    });
     for (const auto &pluginMetaData : plugins) {
         KatePluginInfo info;
         info.metaData = pluginMetaData;
 
         // only load plugins once, even if found multiple times!
-        if (unique.contains(info.saveName()))
+        if (unique.contains(info.saveName())) {
             continue;
+        }
 
         info.defaultLoad = defaultPlugins.contains(info.saveName());
         info.sortOrder = defaultPlugins.value(info.saveName());
@@ -191,7 +198,7 @@ bool KatePluginManager::loadPlugin(KatePluginInfo *item)
      * tell the world about the success
      */
     if (item->plugin) {
-        emit KateApp::self()->wrapper()->pluginCreated(item->saveName(), item->plugin);
+        Q_EMIT KateApp::self()->wrapper()->pluginCreated(item->saveName(), item->plugin);
     }
 
     return item->plugin != nullptr;
@@ -204,7 +211,7 @@ void KatePluginManager::unloadPlugin(KatePluginInfo *item)
     KTextEditor::Plugin *plugin = item->plugin;
     item->plugin = nullptr;
     item->load = false;
-    emit KateApp::self()->wrapper()->pluginDeleted(item->saveName(), plugin);
+    Q_EMIT KateApp::self()->wrapper()->pluginDeleted(item->saveName(), plugin);
 }
 
 void KatePluginManager::enablePluginGUI(KatePluginInfo *item, KateMainWindow *win, KConfigBase *config)
@@ -217,10 +224,20 @@ void KatePluginManager::enablePluginGUI(KatePluginInfo *item, KateMainWindow *wi
     // lookup if there is already a view for it..
     QObject *createdView = nullptr;
     if (!win->pluginViews().contains(item->plugin)) {
+        // ensure messaging is connected, if available, for the complete plugin
+        if (item->plugin->metaObject()->indexOfSignal("message(QVariantMap)") != -1) {
+            connect(item->plugin, SIGNAL(message(const QVariantMap &)), win->outputView(), SLOT(slotMessage(const QVariantMap &)), Qt::UniqueConnection);
+        }
+
         // create the view + try to correctly load shortcuts, if it's a GUI Client
         createdView = item->plugin->createView(win->wrapper());
         if (createdView) {
             win->pluginViews().insert(item->plugin, createdView);
+
+            // ensure messaging is connected, if available, for view, too!
+            if (createdView->metaObject()->indexOfSignal("message(QVariantMap)") != -1) {
+                connect(createdView, SIGNAL(message(const QVariantMap &)), win->outputView(), SLOT(slotMessage(const QVariantMap &)), Qt::UniqueConnection);
+            }
         }
     }
 
@@ -233,7 +250,7 @@ void KatePluginManager::enablePluginGUI(KatePluginInfo *item, KateMainWindow *wi
     }
 
     if (createdView) {
-        emit win->wrapper()->pluginViewCreated(item->saveName(), createdView);
+        Q_EMIT win->wrapper()->pluginViewCreated(item->saveName(), createdView);
     }
 }
 
@@ -266,7 +283,7 @@ void KatePluginManager::disablePluginGUI(KatePluginInfo *item, KateMainWindow *w
     QObject *deletedView = win->pluginViews().value(item->plugin);
     delete deletedView;
     win->pluginViews().remove(item->plugin);
-    emit win->wrapper()->pluginViewDeleted(item->saveName(), deletedView);
+    Q_EMIT win->wrapper()->pluginViewDeleted(item->saveName(), deletedView);
 }
 
 void KatePluginManager::disablePluginGUI(KatePluginInfo *item)

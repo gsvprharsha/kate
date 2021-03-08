@@ -113,14 +113,17 @@ void KateFileTreePlugin::applyConfig(bool shadingEnabled, const QColor &viewShad
 // BEGIN KateFileTreePluginView
 KateFileTreePluginView::KateFileTreePluginView(KTextEditor::MainWindow *mainWindow, KateFileTreePlugin *plug)
     : QObject(mainWindow)
-    , m_loadingDocuments(false)
     , m_plug(plug)
     , m_mainWindow(mainWindow)
 {
     KXMLGUIClient::setComponentName(QStringLiteral("katefiletree"), i18n("Kate File Tree"));
     setXMLFile(QStringLiteral("ui.rc"));
 
-    m_toolView = mainWindow->createToolView(plug, QStringLiteral("kate_private_plugin_katefiletreeplugin"), KTextEditor::MainWindow::Left, QIcon::fromTheme(QStringLiteral("document-open")), i18n("Documents"));
+    m_toolView = mainWindow->createToolView(plug,
+                                            QStringLiteral("kate_private_plugin_katefiletreeplugin"),
+                                            KTextEditor::MainWindow::Left,
+                                            QIcon::fromTheme(QStringLiteral("document-open")),
+                                            i18n("Documents"));
 
     // create toolbar
     m_toolbar = new KToolBar(m_toolView);
@@ -162,17 +165,21 @@ KateFileTreePluginView::KateFileTreePluginView(KTextEditor::MainWindow *mainWind
         }
     });
 
-    connect(KTextEditor::Editor::instance()->application(), &KTextEditor::Application::documentWillBeDeleted, m_documentModel, &KateFileTreeModel::documentClosed);
+    connect(KTextEditor::Editor::instance()->application(),
+            &KTextEditor::Application::documentWillBeDeleted,
+            m_documentModel,
+            &KateFileTreeModel::documentClosed);
     connect(KTextEditor::Editor::instance()->application(), &KTextEditor::Application::documentCreated, this, &KateFileTreePluginView::documentOpened);
     connect(KTextEditor::Editor::instance()->application(), &KTextEditor::Application::documentWillBeDeleted, this, &KateFileTreePluginView::documentClosed);
-    connect(KTextEditor::Editor::instance()->application(), &KTextEditor::Application::aboutToCreateDocuments, this, &KateFileTreePluginView::slotAboutToCreateDocuments);
 
-    connect(KTextEditor::Editor::instance()->application(), &KTextEditor::Application::documentsCreated, this, &KateFileTreePluginView::slotDocumentsCreated);
+    // delayed update for new documents to be more efficient if multiple ones are created at once
+    m_documentsCreatedTimer.setSingleShot(true);
+    m_documentsCreatedTimer.setInterval(0);
+    connect(&m_documentsCreatedTimer, &QTimer::timeout, this, &KateFileTreePluginView::slotDocumentsCreated);
 
-    connect(KTextEditor::Editor::instance()->application(), &KTextEditor::Application::aboutToDeleteDocuments, m_documentModel, &KateFileTreeModel::slotAboutToDeleteDocuments);
-    connect(KTextEditor::Editor::instance()->application(), &KTextEditor::Application::documentsDeleted, m_documentModel, &KateFileTreeModel::slotDocumentsDeleted);
-
-    connect(m_documentModel, &KateFileTreeModel::triggerViewChangeAfterNameChange, [=] { KateFileTreePluginView::viewChanged(); });
+    connect(m_documentModel, &KateFileTreeModel::triggerViewChangeAfterNameChange, [=] {
+        KateFileTreePluginView::viewChanged();
+    });
 
     m_fileTree->setModel(m_proxyModel);
 
@@ -284,17 +291,14 @@ KateFileTree *KateFileTreePluginView::tree() const
 
 void KateFileTreePluginView::documentOpened(KTextEditor::Document *doc)
 {
-    if (m_loadingDocuments) {
-        return;
-    }
-
-    m_documentModel->documentOpened(doc);
-    m_proxyModel->invalidate();
+    // enqueue and start update timer to collapse updates
+    m_documentsCreatedTimer.start();
+    m_documentsCreated.append(doc);
 }
 
 void KateFileTreePluginView::documentClosed(KTextEditor::Document *doc)
 {
-    Q_UNUSED(doc);
+    m_documentsCreated.removeAll(doc);
     m_proxyModel->invalidate();
 }
 
@@ -307,8 +311,6 @@ void KateFileTreePluginView::viewChanged(KTextEditor::View *)
 
     KTextEditor::Document *doc = view->document();
     QModelIndex index = m_proxyModel->docIndex(doc);
-
-    QString display = m_proxyModel->data(index, Qt::DisplayRole).toString();
 
     // update the model on which doc is active
     m_documentModel->documentActivated(doc);
@@ -417,15 +419,11 @@ void KateFileTreePluginView::writeSessionConfig(KConfigGroup &g)
     g.sync();
 }
 
-void KateFileTreePluginView::slotAboutToCreateDocuments()
+void KateFileTreePluginView::slotDocumentsCreated()
 {
-    m_loadingDocuments = true;
-}
-
-void KateFileTreePluginView::slotDocumentsCreated(const QList<KTextEditor::Document *> &docs)
-{
-    m_documentModel->documentsOpened(docs);
-    m_loadingDocuments = false;
+    // handle potential multiple new documents
+    m_documentModel->documentsOpened(m_documentsCreated);
+    m_documentsCreated.clear();
     viewChanged();
 }
 

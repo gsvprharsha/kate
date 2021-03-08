@@ -117,8 +117,9 @@ GUIClient::GUIClient(MainWindow *mw)
 
     actionCollection()->addAssociatedWidget(m_mw);
     const auto actions = actionCollection()->actions();
-    for (QAction *action : actions)
+    for (QAction *action : actions) {
         action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    }
 }
 
 GUIClient::~GUIClient()
@@ -250,7 +251,7 @@ void ToolView::setToolVisible(bool vis)
     }
 
     m_toolVisible = vis;
-    emit toolVisibleChanged(m_toolVisible);
+    Q_EMIT toolVisibleChanged(m_toolVisible);
 }
 
 bool ToolView::toolVisible() const
@@ -530,7 +531,9 @@ bool Sidebar::eventFilter(QObject *obj, QEvent *ev)
 
                 menu->addSection(QIcon::fromTheme(QStringLiteral("view_remove")), i18n("Behavior"));
 
-                menu->addAction(w->persistent ? QIcon::fromTheme(QStringLiteral("view-restore")) : QIcon::fromTheme(QStringLiteral("view-fullscreen")), w->persistent ? i18n("Make Non-Persistent") : i18n("Make Persistent"))->setData(10);
+                menu->addAction(w->persistent ? QIcon::fromTheme(QStringLiteral("view-restore")) : QIcon::fromTheme(QStringLiteral("view-fullscreen")),
+                                w->persistent ? i18n("Make Non-Persistent") : i18n("Make Persistent"))
+                    ->setData(10);
 
                 menu->addSection(QIcon::fromTheme(QStringLiteral("move")), i18n("Move To"));
 
@@ -598,7 +601,7 @@ void Sidebar::buttonPopupActivate(QAction *a)
     if (id == 20) {
         if (!w->plugin.isNull()) {
             if (w->plugin.data()->configPages() > 0) {
-                emit sigShowPluginConfigPage(w->plugin.data(), 0);
+                Q_EMIT sigShowPluginConfigPage(w->plugin.data(), 0);
             }
         }
     }
@@ -652,13 +655,15 @@ void Sidebar::restoreSession(KConfigGroup &config)
         }
 
         // now: sort the stuff we need to reshuffle
-        for (int m = 0; m < toSort.size(); ++m)
-            for (int n = m + 1; n < toSort.size(); ++n)
+        for (int m = 0; m < toSort.size(); ++m) {
+            for (int n = m + 1; n < toSort.size(); ++n) {
                 if (toSort[n].pos < toSort[m].pos) {
                     TmpToolViewSorter tmp = toSort[n];
                     toSort[n] = toSort[m];
                     toSort[m] = tmp;
                 }
+            }
+        }
 
         // then: remove this items from the button bar
         // do this backwards, to minimize the relayout efforts
@@ -675,7 +680,7 @@ void Sidebar::restoreSession(KConfigGroup &config)
             // readd the button
             int newId = m_widgetToId[tv];
             appendTab(tv->icon, newId, tv->text);
-            connect(tab(newId), SIGNAL(clicked(int)), this, SLOT(tabClicked(int)));
+            connect(tab(newId), &KMultiTabBarTab::clicked, this, &Sidebar::tabClicked);
             tab(newId)->installEventFilter(this);
             tab(newId)->setToolTip(QString());
 
@@ -814,7 +819,11 @@ QWidget *MainWindow::centralWidget() const
     return m_centralWidget;
 }
 
-ToolView *MainWindow::createToolView(KTextEditor::Plugin *plugin, const QString &identifier, KMultiTabBar::KMultiTabBarPosition pos, const QIcon &icon, const QString &text)
+ToolView *MainWindow::createToolView(KTextEditor::Plugin *plugin,
+                                     const QString &identifier,
+                                     KMultiTabBar::KMultiTabBarPosition pos,
+                                     const QIcon &icon,
+                                     const QString &text)
 {
     if (m_idToWidget[identifier]) {
         return nullptr;
@@ -1002,7 +1011,8 @@ void MainWindow::finishRestore()
 
         // reshuffle toolviews only if needed
         for (const auto tv : qAsConst(m_toolviews)) {
-            KMultiTabBar::KMultiTabBarPosition newPos = static_cast<KMultiTabBar::KMultiTabBarPosition>(cg.readEntry(QStringLiteral("Kate-MDI-ToolView-%1-Position").arg(tv->id), int(tv->sidebar()->position())));
+            KMultiTabBar::KMultiTabBarPosition newPos = static_cast<KMultiTabBar::KMultiTabBarPosition>(
+                cg.readEntry(QStringLiteral("Kate-MDI-ToolView-%1-Position").arg(tv->id), int(tv->sidebar()->position())));
 
             if (tv->sidebar()->position() != newPos) {
                 moveToolView(tv, newPos);

@@ -240,8 +240,10 @@ void KateViewManager::slotDocumentOpen()
         }
     }
     if (!fileListWithTooLargeFiles.isEmpty()) {
-        const QString text = i18n("<p>You are attempting to open one or more large files:</p><ul>%1</ul><p>Do you want to proceed?</p><p><strong>Beware that kate may stop responding for some time when opening large files.</strong></p>",
-                                  fileListWithTooLargeFiles);
+        const QString text = i18n(
+            "<p>You are attempting to open one or more large files:</p><ul>%1</ul><p>Do you want to proceed?</p><p><strong>Beware that kate may stop "
+            "responding for some time when opening large files.</strong></p>",
+            fileListWithTooLargeFiles);
         const auto ret = KMessageBox::warningYesNo(this, text, i18n("Opening Large File"), KStandardGuiItem::cont(), KStandardGuiItem::stop());
         if (ret == KMessageBox::No) {
             return;
@@ -445,8 +447,14 @@ KTextEditor::View *KateViewManager::createView(KTextEditor::Document *doc, KateV
     delete view->actionCollection()->action(QStringLiteral("set_confdlg"));
     delete view->actionCollection()->action(QStringLiteral("editor_options"));
 
-    connect(view, SIGNAL(dropEventPass(QDropEvent *)), mainWindow(), SLOT(slotDropEvent(QDropEvent *)));
+    // clang-format off
+    connect(view, SIGNAL(dropEventPass(QDropEvent*)), mainWindow(), SLOT(slotDropEvent(QDropEvent*)));
+    // clang-format on
     connect(view, &KTextEditor::View::focusIn, this, &KateViewManager::activateSpace);
+
+    connect(view, &KTextEditor::View::cursorPositionChanged, this, [this](KTextEditor::View *view, const KTextEditor::Cursor &newPosition) {
+        m_mainWindow->addJump(view->document()->url(), newPosition);
+    });
 
     viewCreated(view);
 
@@ -625,7 +633,7 @@ void KateViewManager::activateView(KTextEditor::View *view)
         // remember age of this view
         m_views[view].lruAge = m_minAge--;
 
-        emit viewChanged(view);
+        Q_EMIT viewChanged(view);
 
 #ifdef KF5Activities_FOUND
         // inform activity manager
@@ -729,7 +737,7 @@ void KateViewManager::closeView(KTextEditor::View *view)
             }
         }
 
-        emit viewChanged(newActiveView);
+        Q_EMIT viewChanged(newActiveView);
     }
 }
 
@@ -939,7 +947,7 @@ void KateViewManager::removeViewSpace(KateViewSpace *viewspace)
 
     updateViewSpaceActions();
 
-    emit viewChanged(v);
+    Q_EMIT viewChanged(v);
 }
 
 void KateViewManager::slotCloseOtherViews()
@@ -1082,8 +1090,9 @@ QString KateViewManager::saveSplitterConfig(QSplitter *s, KConfigBase *configBas
     const auto sizes = s->sizes();
     for (int it = 0; it < s->count(); ++it) {
         // skip empty sized invisible ones, if not last one, we need one thing at least
-        if ((sizes[it] == 0) && ((it + 1 < s->count()) || !childList.empty()))
+        if ((sizes[it] == 0) && ((it + 1 < s->count()) || !childList.empty())) {
             continue;
+        }
 
         // For KateViewSpaces, ask them to save the file list.
         auto obj = s->widget(it);
@@ -1103,8 +1112,9 @@ QString KateViewManager::saveSplitterConfig(QSplitter *s, KConfigBase *configBas
     }
 
     // if only one thing, skip splitter config export, if not top splitter
-    if ((s != this) && (childList.size() == 1))
+    if ((s != this) && (childList.size() == 1)) {
         return childList.at(0);
+    }
 
     // Save sizes, orient, children for this splitter
     KConfigGroup config(configBase, grp);

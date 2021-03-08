@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
 
     SPDX-License-Identifier: MIT
@@ -26,12 +25,16 @@ namespace utils
 // function bind helpers
 template<typename R, typename T, typename Tp, typename... Args> inline std::function<R(Args...)> mem_fun(R (T::*pm)(Args...), Tp object)
 {
-    return [object, pm](Args... args) { return (object->*pm)(std::forward<Args>(args)...); };
+    return [object, pm](Args... args) {
+        return (object->*pm)(std::forward<Args>(args)...);
+    };
 }
 
 template<typename R, typename T, typename Tp, typename... Args> inline std::function<R(Args...)> mem_fun(R (T::*pm)(Args...) const, Tp object)
 {
-    return [object, pm](Args... args) { return (object->*pm)(std::forward<Args>(args)...); };
+    return [object, pm](Args... args) {
+        return (object->*pm)(std::forward<Args>(args)...);
+    };
 }
 
 // prevent argument deduction
@@ -56,6 +59,7 @@ using FormattingReplyHandler = ReplyHandler<QList<LSPTextEdit>>;
 using CodeActionReplyHandler = ReplyHandler<QList<LSPCodeAction>>;
 using WorkspaceEditReplyHandler = ReplyHandler<LSPWorkspaceEdit>;
 using ApplyEditReplyHandler = ReplyHandler<LSPApplyWorkspaceEditResponse>;
+using SwitchSourceHeaderHandler = ReplyHandler<QString>;
 
 class LSPClientPlugin;
 
@@ -76,8 +80,9 @@ public:
     public:
         RequestHandle &cancel()
         {
-            if (m_server)
+            if (m_server) {
                 m_server->cancel(m_id);
+            }
             return *this;
         }
     };
@@ -113,12 +118,30 @@ public:
     RequestHandle documentCompletion(const QUrl &document, const LSPPosition &pos, const QObject *context, const DocumentCompletionReplyHandler &h);
     RequestHandle signatureHelp(const QUrl &document, const LSPPosition &pos, const QObject *context, const SignatureHelpReplyHandler &h);
 
-    RequestHandle documentFormatting(const QUrl &document, const LSPFormattingOptions &options, const QObject *context, const FormattingReplyHandler &h);
-    RequestHandle documentRangeFormatting(const QUrl &document, const LSPRange &range, const LSPFormattingOptions &options, const QObject *context, const FormattingReplyHandler &h);
-    RequestHandle documentOnTypeFormatting(const QUrl &document, const LSPPosition &pos, QChar lastChar, const LSPFormattingOptions &options, const QObject *context, const FormattingReplyHandler &h);
-    RequestHandle documentRename(const QUrl &document, const LSPPosition &pos, const QString &newName, const QObject *context, const WorkspaceEditReplyHandler &h);
+    // clangd specific
+    RequestHandle clangdSwitchSourceHeader(const QUrl &document, const QObject *context, const SwitchSourceHeaderHandler &h);
 
-    RequestHandle documentCodeAction(const QUrl &document, const LSPRange &range, const QList<QString> &kinds, QList<LSPDiagnostic> diagnostics, const QObject *context, const CodeActionReplyHandler &h);
+    RequestHandle documentFormatting(const QUrl &document, const LSPFormattingOptions &options, const QObject *context, const FormattingReplyHandler &h);
+    RequestHandle documentRangeFormatting(const QUrl &document,
+                                          const LSPRange &range,
+                                          const LSPFormattingOptions &options,
+                                          const QObject *context,
+                                          const FormattingReplyHandler &h);
+    RequestHandle documentOnTypeFormatting(const QUrl &document,
+                                           const LSPPosition &pos,
+                                           QChar lastChar,
+                                           const LSPFormattingOptions &options,
+                                           const QObject *context,
+                                           const FormattingReplyHandler &h);
+    RequestHandle
+    documentRename(const QUrl &document, const LSPPosition &pos, const QString &newName, const QObject *context, const WorkspaceEditReplyHandler &h);
+
+    RequestHandle documentCodeAction(const QUrl &document,
+                                     const LSPRange &range,
+                                     const QList<QString> &kinds,
+                                     QList<LSPDiagnostic> diagnostics,
+                                     const QObject *context,
+                                     const CodeActionReplyHandler &h);
     void executeCommand(const QString &command, const QJsonValue &args);
 
     // sync

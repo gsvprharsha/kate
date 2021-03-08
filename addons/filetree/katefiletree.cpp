@@ -16,18 +16,11 @@
 #include <ktexteditor/document.h>
 #include <ktexteditor/editor.h>
 
-#include <kio_version.h>
-#if KIO_VERSION < QT_VERSION_CHECK(5, 71, 0)
-#include <KOpenWithDialog>
-#include <KRun>
-#else
-#include <KIO/ApplicationLauncherJob>
-#include <KIO/JobUiDelegate>
-#endif
-
 #include <KApplicationTrader>
+#include <KIO/ApplicationLauncherJob>
 #include <KIO/CopyJob>
 #include <KIO/DeleteJob>
+#include <KIO/JobUiDelegate>
 #include <KIO/OpenFileManagerWindowJob>
 #include <KLocalizedString>
 #include <KMessageBox>
@@ -79,7 +72,8 @@ KateFileTree::KateFileTree(QWidget *parent)
     connect(m_filelistCloseOtherDocument, &QAction::triggered, this, &KateFileTree::slotDocumentCloseOther);
     m_filelistCloseOtherDocument->setWhatsThis(i18n("Close other documents in this folder."));
 
-    m_filelistOpenContainingFolder = new QAction(QIcon::fromTheme(QStringLiteral("document-open-folder")), i18nc("@action:inmenu", "Open Containing Folder"), this);
+    m_filelistOpenContainingFolder =
+        new QAction(QIcon::fromTheme(QStringLiteral("document-open-folder")), i18nc("@action:inmenu", "Open Containing Folder"), this);
     connect(m_filelistOpenContainingFolder, &QAction::triggered, this, &KateFileTree::slotOpenContainingFolder);
     m_filelistOpenContainingFolder->setWhatsThis(i18n("Open the folder this file is located in."));
 
@@ -91,10 +85,10 @@ KateFileTree::KateFileTree(QWidget *parent)
     connect(m_filelistRenameFile, &QAction::triggered, this, &KateFileTree::slotRenameFile);
     m_filelistRenameFile->setWhatsThis(i18n("Rename the selected file."));
 
-    m_filelistPrintDocument = KStandardAction::print(this, SLOT(slotPrintDocument()), this);
+    m_filelistPrintDocument = KStandardAction::print(this, &KateFileTree::slotPrintDocument, this);
     m_filelistPrintDocument->setWhatsThis(i18n("Print selected document."));
 
-    m_filelistPrintDocumentPreview = KStandardAction::printPreview(this, SLOT(slotPrintDocumentPreview()), this);
+    m_filelistPrintDocumentPreview = KStandardAction::printPreview(this, &KateFileTree::slotPrintDocumentPreview, this);
     m_filelistPrintDocumentPreview->setWhatsThis(i18n("Show print preview of current document"));
 
     m_filelistDeleteDocument = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18nc("@action:inmenu", "Delete"), this);
@@ -103,17 +97,34 @@ KateFileTree::KateFileTree(QWidget *parent)
 
     QActionGroup *modeGroup = new QActionGroup(this);
 
-    m_treeModeAction = setupOption(modeGroup, QIcon::fromTheme(QStringLiteral("view-list-tree")), i18nc("@action:inmenu", "Tree Mode"), i18n("Set view style to Tree Mode"), SLOT(slotTreeMode()), true);
+    m_treeModeAction = setupOption(modeGroup,
+                                   QIcon::fromTheme(QStringLiteral("view-list-tree")),
+                                   i18nc("@action:inmenu", "Tree Mode"),
+                                   i18n("Set view style to Tree Mode"),
+                                   SLOT(slotTreeMode()),
+                                   true);
 
-    m_listModeAction = setupOption(modeGroup, QIcon::fromTheme(QStringLiteral("view-list-text")), i18nc("@action:inmenu", "List Mode"), i18n("Set view style to List Mode"), SLOT(slotListMode()), false);
+    m_listModeAction = setupOption(modeGroup,
+                                   QIcon::fromTheme(QStringLiteral("view-list-text")),
+                                   i18nc("@action:inmenu", "List Mode"),
+                                   i18n("Set view style to List Mode"),
+                                   SLOT(slotListMode()),
+                                   false);
 
     QActionGroup *sortGroup = new QActionGroup(this);
 
-    m_sortByFile = setupOption(sortGroup, QIcon(), i18nc("@action:inmenu sorting option", "Document Name"), i18n("Sort by Document Name"), SLOT(slotSortName()), true);
+    m_sortByFile =
+        setupOption(sortGroup, QIcon(), i18nc("@action:inmenu sorting option", "Document Name"), i18n("Sort by Document Name"), SLOT(slotSortName()), true);
 
-    m_sortByPath = setupOption(sortGroup, QIcon(), i18nc("@action:inmenu sorting option", "Document Path"), i18n("Sort by Document Path"), SLOT(slotSortPath()), false);
+    m_sortByPath =
+        setupOption(sortGroup, QIcon(), i18nc("@action:inmenu sorting option", "Document Path"), i18n("Sort by Document Path"), SLOT(slotSortPath()), false);
 
-    m_sortByOpeningOrder = setupOption(sortGroup, QIcon(), i18nc("@action:inmenu sorting option", "Opening Order"), i18n("Sort by Opening Order"), SLOT(slotSortOpeningOrder()), false);
+    m_sortByOpeningOrder = setupOption(sortGroup,
+                                       QIcon(),
+                                       i18nc("@action:inmenu sorting option", "Opening Order"),
+                                       i18n("Sort by Opening Order"),
+                                       SLOT(slotSortOpeningOrder()),
+                                       false);
 
     m_resetHistory = new QAction(QIcon::fromTheme(QStringLiteral("edit-clear-history")), i18nc("@action:inmenu", "Clear History"), this);
     connect(m_resetHistory, &QAction::triggered, this, &KateFileTree::slotResetHistory);
@@ -148,27 +159,27 @@ QAction *KateFileTree::setupOption(QActionGroup *group, const QIcon &icon, const
 
 void KateFileTree::slotListMode()
 {
-    emit viewModeChanged(true);
+    Q_EMIT viewModeChanged(true);
 }
 
 void KateFileTree::slotTreeMode()
 {
-    emit viewModeChanged(false);
+    Q_EMIT viewModeChanged(false);
 }
 
 void KateFileTree::slotSortName()
 {
-    emit sortRoleChanged(Qt::DisplayRole);
+    Q_EMIT sortRoleChanged(Qt::DisplayRole);
 }
 
 void KateFileTree::slotSortPath()
 {
-    emit sortRoleChanged(KateFileTreeModel::PathRole);
+    Q_EMIT sortRoleChanged(KateFileTreeModel::PathRole);
 }
 
 void KateFileTree::slotSortOpeningOrder()
 {
-    emit sortRoleChanged(KateFileTreeModel::OpeningOrderRole);
+    Q_EMIT sortRoleChanged(KateFileTreeModel::OpeningOrderRole);
 }
 
 void KateFileTree::slotCurrentChanged(const QModelIndex &current, const QModelIndex &previous)
@@ -187,7 +198,7 @@ void KateFileTree::slotCurrentChanged(const QModelIndex &current, const QModelIn
 void KateFileTree::mouseClicked(const QModelIndex &index)
 {
     if (auto doc = model()->data(index, KateFileTreeModel::DocumentRole).value<KTextEditor::Document *>()) {
-        emit activateDocument(doc);
+        Q_EMIT activateDocument(doc);
     }
 }
 
@@ -297,31 +308,12 @@ void KateFileTree::slotOpenWithMenuAction(QAction *a)
 
     const QList<QUrl> list({doc->url()});
 
-#if KIO_VERSION < QT_VERSION_CHECK(5, 71, 0)
-    const QString openWith = a->data().toString();
-    if (openWith.isEmpty()) {
-        // display "open with" dialog
-        KOpenWithDialog dlg(list);
-        if (dlg.exec()) {
-            KRun::runService(*dlg.service(), list, this);
-        }
-        return;
-    }
-
-    KService::Ptr app = KService::serviceByDesktopPath(openWith);
-    if (app) {
-        KRun::runService(*app, list, this);
-    } else {
-        KMessageBox::error(this, i18n("Application '%1' not found.", openWith), i18n("Application not found"));
-    }
-#else
     KService::Ptr app = KService::serviceByDesktopPath(a->data().toString());
     // If app is null, ApplicationLauncherJob will invoke the open-with dialog
     auto *job = new KIO::ApplicationLauncherJob(app);
     job->setUrls(list);
     job->setUiDelegate(new KIO::JobUiDelegate(KJobUiDelegate::AutoHandlingEnabled, this));
     job->start();
-#endif
 }
 
 Q_DECLARE_METATYPE(QList<KTextEditor::Document *>)
@@ -485,7 +477,7 @@ void KateFileTree::slotDocumentFirst()
 {
     KTextEditor::Document *doc = model()->data(model()->index(0, 0), KateFileTreeModel::DocumentRole).value<KTextEditor::Document *>();
     if (doc) {
-        emit activateDocument(doc);
+        Q_EMIT activateDocument(doc);
     }
 }
 
@@ -494,7 +486,7 @@ void KateFileTree::slotDocumentLast()
     int count = model()->rowCount(model()->parent(currentIndex()));
     KTextEditor::Document *doc = model()->data(model()->index(count - 1, 0), KateFileTreeModel::DocumentRole).value<KTextEditor::Document *>();
     if (doc) {
-        emit activateDocument(doc);
+        Q_EMIT activateDocument(doc);
     }
 }
 
@@ -568,7 +560,7 @@ void KateFileTree::slotDocumentPrev()
 
     if (prev.isValid()) {
         KTextEditor::Document *doc = model()->data(prev, KateFileTreeModel::DocumentRole).value<KTextEditor::Document *>();
-        emit activateDocument(doc);
+        Q_EMIT activateDocument(doc);
     }
 }
 
@@ -642,7 +634,7 @@ void KateFileTree::slotDocumentNext()
 
     if (next.isValid()) {
         KTextEditor::Document *doc = model()->data(next, KateFileTreeModel::DocumentRole).value<KTextEditor::Document *>();
-        emit activateDocument(doc);
+        Q_EMIT activateDocument(doc);
     }
 }
 
@@ -687,9 +679,13 @@ void KateFileTree::slotDocumentDelete()
 
     QUrl url = doc->url();
 
-    bool go = (KMessageBox::warningContinueCancel(
-                   this, i18n("Do you really want to delete file \"%1\" from storage?", url.toDisplayString()), i18n("Delete file?"), KStandardGuiItem::yes(), KStandardGuiItem::no(), QStringLiteral("filetreedeletefile")) ==
-               KMessageBox::Continue);
+    bool go = (KMessageBox::warningContinueCancel(this,
+                                                  i18n("Do you really want to delete file \"%1\" from storage?", url.toDisplayString()),
+                                                  i18n("Delete file?"),
+                                                  KStandardGuiItem::yes(),
+                                                  KStandardGuiItem::no(),
+                                                  QStringLiteral("filetreedeletefile"))
+               == KMessageBox::Continue);
 
     if (!go) {
         return;

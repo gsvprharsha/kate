@@ -9,8 +9,8 @@ set(RELEASE_SERVICE_VERSION "${RELEASE_SERVICE_VERSION_MAJOR}.${RELEASE_SERVICE_
 
 project(kate VERSION ${RELEASE_SERVICE_VERSION})
 
-set(QT_MIN_VERSION "5.10.0")
-set(KF5_DEP_VERSION "5.68.0")
+set(QT_MIN_VERSION "5.14.0")
+set(KF5_DEP_VERSION "5.79.0")
 
 # We need some parts of the ECM CMake helpers.
 find_package(ECM ${KF5_DEP_VERSION} QUIET REQUIRED NO_MODULE)
@@ -26,6 +26,7 @@ include(KDEFrameworkCompilerSettings NO_POLICY_SCOPE)
 include(KDEInstallDirs)
 include(KDECMakeSettings)
 include(KDEClangFormat)
+include(KDEGitCommitHooks)
 
 include(ECMOptionalAddSubdirectory)
 include(ECMAddAppIcon)
@@ -63,3 +64,4 @@ feature_summary(INCLUDE_QUIET_PACKAGES WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAG
 # add clang-format target for all our real source files
 file(GLOB_RECURSE ALL_CLANG_FORMAT_SOURCE_FILES *.cpp *.h)
 kde_clang_format(${ALL_CLANG_FORMAT_SOURCE_FILES})
+kde_configure_git_pre_commit_hook(CHECKS CLANG_FORMAT)

@@ -69,14 +69,14 @@ void KatePluginSymbolViewerView::parsePhpSymbols(void)
         // classes constants: https://www.php.net/manual/en/language.oop5.constants.php
         QRegExp constantRegExp(QLatin1String("^const\\s+([\\w_][\\w\\d_]*)"), Qt::CaseInsensitive);
         // functions: https://www.php.net/manual/en/language.oop5.constants.php
-        QRegExp functionRegExp(QLatin1String("^((public|protected|private)?(\\s*static)?\\s+)?function\\s+&?\\s*([\\w_][\\w\\d_]*)\\s*(.*)$"), Qt::CaseInsensitive);
+        QRegExp functionRegExp(QLatin1String("^((public|protected|private)?(\\s*static)?\\s+)?function\\s+&?\\s*([\\w_][\\w\\d_]*)\\s*(.*)$"),
+                               Qt::CaseInsensitive);
         // variables: https://www.php.net/manual/en/language.oop5.properties.php
         QRegExp varRegExp(QLatin1String("^((var|public|protected|private)?(\\s*static)?\\s+)?\\$([\\w_][\\w\\d_]*)"), Qt::CaseInsensitive);
 
         // function args detection: “function a($b, $c=null)” => “$b, $v”
         QRegExp functionArgsRegExp(QLatin1String("(\\$[\\w_]+)"), Qt::CaseInsensitive);
         QStringList functionArgsList;
-        QString functionArgs;
         QString nameWithTypes;
 
         // replace literals by empty strings: “function a($b='nothing', $c="pretty \"cool\" string")” => “function ($b='', $c="")”
@@ -182,7 +182,8 @@ void KatePluginSymbolViewerView::parsePhpSymbols(void)
                 if (isClass) {
                     if (m_typesOn->isChecked()) {
                         if (!classRegExp.cap(1).trimmed().isEmpty() && !classRegExp.cap(4).trimmed().isEmpty()) {
-                            nameWithTypes = classRegExp.cap(3) + QLatin1String(" [") + classRegExp.cap(1).trimmed() + QLatin1Char(',') + classRegExp.cap(4).trimmed() + QLatin1Char(']');
+                            nameWithTypes = classRegExp.cap(3) + QLatin1String(" [") + classRegExp.cap(1).trimmed() + QLatin1Char(',')
+                                + classRegExp.cap(4).trimmed() + QLatin1Char(']');
                         } else if (!classRegExp.cap(1).trimmed().isEmpty()) {
                             nameWithTypes = classRegExp.cap(3) + QLatin1String(" [") + classRegExp.cap(1).trimmed() + QLatin1Char(']');
                         } else if (!classRegExp.cap(4).trimmed().isEmpty()) {

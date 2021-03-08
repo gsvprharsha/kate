@@ -1,164 +1,145 @@
-/*   Kate search plugin
- *
- * SPDX-FileCopyrightText: 2011-2021 Kåre Särs <kare.sars@iki.fi>
- *
- * SPDX-License-Identifier: LGPL-2.0-or-later
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program in a file called COPYING; if not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA 02110-1301, USA.
- */
+/*
+    SPDX-FileCopyrightText: 2011-21 Kåre Särs <kare.sars@iki.fi>
+    SPDX-FileCopyrightText: 2021 Christoph Cullmann <cullmann@kde.org>
+
+    SPDX-License-Identifier: LGPL-2.0-or-later
+*/
 
 #include "SearchDiskFiles.h"
 
 #include <QDir>
-#include <QMimeDatabase>
+#include <QElapsedTimer>
 #include <QTextStream>
 #include <QUrl>
 
-SearchDiskFiles::SearchDiskFiles(QObject *parent)
-    : QThread(parent)
+SearchDiskFiles::SearchDiskFiles(SearchDiskFilesWorkList &worklist, const QRegularExpression &regexp, const bool includeBinaryFiles)
+    : m_worklist(worklist)
+    , m_regExp(regexp.pattern(), regexp.patternOptions()) // we WANT to kill the sharing, ELSE WE LOCK US DEAD!
+    , m_includeBinaryFiles(includeBinaryFiles)
 {
-}
-
-SearchDiskFiles::~SearchDiskFiles()
-{
-    m_cancelSearch = true;
-    wait();
-}
-
-void SearchDiskFiles::startSearch(const QStringList &files, const QRegularExpression &regexp, const bool includeBinaryFiles)
-{
-    if (files.empty()) {
-        emit searchDone();
-        return;
-    }
-    m_includeBinaryFiles = includeBinaryFiles;
-    m_cancelSearch = false;
-    m_terminateSearch = false;
-    m_files = files;
-    m_regExp = regexp;
-    m_matchCount = 0;
-    m_statusTime.restart();
-    start();
+    // ensure we have a proper thread name during e.g. perf profiling
+    setObjectName(QStringLiteral("SearchDiskFiles"));
 }
 
 void SearchDiskFiles::run()
 {
-    for (const QString &fileName : qAsConst(m_files)) {
-        if (m_cancelSearch) {
+    // do we need to search multiple lines?
+    const bool multiLineSearch = m_regExp.pattern().contains(QLatin1String("\\n"));
+
+    // timer to emit matchesFound once in a time even for files without matches
+    // this triggers process in the UI
+    QElapsedTimer emitTimer;
+    emitTimer.start();
+
+    // search, pulls work from the shared work list for all workers
+    while (true) {
+        // get next file, we get empty string if all done or search canceled!
+        const auto fileName = m_worklist.nextFileToSearch();
+        if (fileName.isEmpty()) {
             break;
         }
 
-        if (m_statusTime.elapsed() > 100) {
-            m_statusTime.restart();
-            emit searching(fileName);
+        // open file early, this allows mime-type detection & search to use same io device
+        QFile file(fileName);
+        if (!file.open(QFile::ReadOnly)) {
+            continue;
         }
 
-        // exclude binary files?
-        if (!m_includeBinaryFiles) {
-            const auto mimeType = QMimeDatabase().mimeTypeForFile(fileName);
-            if (!mimeType.inherits(QStringLiteral("text/plain"))) {
-                continue;
-            }
-        }
-
-        if (m_regExp.pattern().contains(QLatin1String("\\n"))) {
-            searchMultiLineRegExp(fileName);
+        // let the right search algorithm compute the matches for this file
+        QVector<KateSearchMatch> matches;
+        if (multiLineSearch) {
+            matches = searchMultiLineRegExp(file);
         } else {
-            searchSingleLineRegExp(fileName);
+            matches = searchSingleLineRegExp(file);
+        }
+
+        // if we have matches or didn't emit something long enough, do so
+        // we don't emit for all file to not stall get GUI and lock us a lot ;)
+        if (!matches.isEmpty() || emitTimer.hasExpired(100)) {
+            Q_EMIT matchesFound(QUrl::fromLocalFile(file.fileName()), matches);
+            emitTimer.restart();
         }
     }
-
-    if (!m_terminateSearch) {
-        emit searchDone();
-    }
-    m_cancelSearch = true;
 }
 
-void SearchDiskFiles::cancelSearch()
+QVector<KateSearchMatch> SearchDiskFiles::searchSingleLineRegExp(QFile &file)
 {
-    m_cancelSearch = true;
-}
-
-void SearchDiskFiles::terminateSearch()
-{
-    m_cancelSearch = true;
-    m_terminateSearch = true;
-    wait();
-}
-
-bool SearchDiskFiles::searching()
-{
-    return !m_cancelSearch;
-}
-
-void SearchDiskFiles::searchSingleLineRegExp(const QString &fileName)
-{
-    QFile file(fileName);
-    if (!file.open(QFile::ReadOnly)) {
-        return;
-    }
-
     QTextStream stream(&file);
-    QString line;
-    int i = 0;
-    int column;
-    QRegularExpressionMatch match;
     QVector<KateSearchMatch> matches;
-    while (!(line = stream.readLine()).isNull()) {
-        if (m_cancelSearch)
-            break;
-        match = m_regExp.match(line);
-        column = match.capturedStart();
-        while (column != -1 && !match.captured().isEmpty()) {
-            if (m_cancelSearch)
+    QString line;
+    int currentLineNumber = 0;
+    while (stream.readLineInto(&line)) {
+        // check if not binary data....
+        // bad, but stuff better than asking QMimeDatabase which is a performance & threading disaster...
+        if (!m_includeBinaryFiles && line.contains(QLatin1Char('\0'))) {
+            // kill all seen matches and be done
+            matches.clear();
+            return matches;
+        }
+
+        // match all occurrences in the current line
+        int columnToStartMatch = 0;
+        bool canceled = false;
+        while (true) {
+            // handle canceling
+            if (m_worklist.isCanceled()) {
+                canceled = true;
+                break;
+            }
+
+            // try match at the current interesting column, abort search loop if nothing found!
+            const QRegularExpressionMatch match = m_regExp.match(line, columnToStartMatch);
+            const int column = match.capturedStart();
+            if (column == -1 || match.capturedLength() == 0)
                 break;
 
-            int endColumn = column + match.capturedLength();
-            int preContextStart = qMax(0, column-MatchModel::PreContextLen);
-            QString preContext = line.mid(preContextStart, column-preContextStart);
-            QString postContext = line.mid(endColumn, MatchModel::PostContextLen);
+            // remember match
+            const int endColumn = column + match.capturedLength();
+            const int preContextStart = qMax(0, column - MatchModel::PreContextLen);
+            const QString preContext = line.mid(preContextStart, column - preContextStart);
+            const QString postContext = line.mid(endColumn, MatchModel::PostContextLen);
+            matches.push_back(KateSearchMatch{preContext,
+                                              match.captured(),
+                                              postContext,
+                                              QString(),
+                                              KTextEditor::Range{currentLineNumber, column, currentLineNumber, column + match.capturedLength()},
+                                              true});
 
-            matches.push_back(KateSearchMatch{preContext, match.captured(), postContext, QString(), KTextEditor::Range{i, column, i, column + match.capturedLength()}, true});
-
-            match = m_regExp.match(line, column + match.capturedLength());
-            column = match.capturedStart();
-            m_matchCount++;
-            // NOTE: This sleep is here so that the main thread will get a chance to
-            // handle any stop button clicks if there are a lot of matches
-            if (m_matchCount % 50)
-                msleep(1);
+            // advance match column
+            columnToStartMatch = column + match.capturedLength();
         }
-        i++;
-    }
 
-    // emit all matches batched
-    const QUrl fileUrl = QUrl::fromUserInput(fileName);
-    emit matchesFound(fileUrl, matches);
+        // handle canceling => above we only did break out of the matching loop!
+        if (canceled) {
+            break;
+        }
+
+        // advance to next line
+        ++currentLineNumber;
+    }
+    return matches;
 }
 
-void SearchDiskFiles::searchMultiLineRegExp(const QString &fileName)
+QVector<KateSearchMatch> SearchDiskFiles::searchMultiLineRegExp(QFile &file)
 {
-    QFile file(fileName);
     int column = 0;
     int line = 0;
-    static QString fullDoc;
-    static QVector<int> lineStart;
+    QString fullDoc;
+    QVector<int> lineStart;
     QRegularExpression tmpRegExp = m_regExp;
 
-    if (!file.open(QFile::ReadOnly)) {
-        return;
-    }
-
+    QVector<KateSearchMatch> matches;
     QTextStream stream(&file);
     fullDoc = stream.readAll();
+
+    // check if not binary data....
+    // bad, but stuff better than asking QMimeDatabase which is a performance & threading disaster...
+    if (!m_includeBinaryFiles && fullDoc.contains(QLatin1Char('\0'))) {
+        // kill all seen matches and be done
+        matches.clear();
+        return matches;
+    }
+
     fullDoc.remove(QLatin1Char('\r'));
 
     lineStart.clear();
@@ -178,10 +159,10 @@ void SearchDiskFiles::searchMultiLineRegExp(const QString &fileName)
     QRegularExpressionMatch match;
     match = tmpRegExp.match(fullDoc);
     column = match.capturedStart();
-    QVector<KateSearchMatch> matches;
     while (column != -1 && !match.captured().isEmpty()) {
-        if (m_cancelSearch)
+        if (m_worklist.isCanceled()) {
             break;
+        }
         // search for the line number of the match
         int i;
         line = -1;
@@ -199,22 +180,15 @@ void SearchDiskFiles::searchMultiLineRegExp(const QString &fileName)
         int lastNL = match.captured().lastIndexOf(QLatin1Char('\n'));
         int endColumn = lastNL == -1 ? startColumn + match.captured().length() : match.captured().length() - lastNL - 1;
 
-        int preContextStart = qMax(lineStart[line], column-MatchModel::PreContextLen);
-        QString preContext = fullDoc.mid(preContextStart, column-preContextStart);
+        int preContextStart = qMax(lineStart[line], column - MatchModel::PreContextLen);
+        QString preContext = fullDoc.mid(preContextStart, column - preContextStart);
         QString postContext = fullDoc.mid(column + match.captured().length(), MatchModel::PostContextLen);
 
-        matches.push_back(KateSearchMatch{preContext, match.captured(), postContext, QString(), KTextEditor::Range{line, startColumn, endLine, endColumn}, true});
+        matches.push_back(
+            KateSearchMatch{preContext, match.captured(), postContext, QString(), KTextEditor::Range{line, startColumn, endLine, endColumn}, true});
 
         match = tmpRegExp.match(fullDoc, column + match.capturedLength());
         column = match.capturedStart();
-        m_matchCount++;
-        // NOTE: This sleep is here so that the main thread will get a chance to
-        // handle any stop button clicks if there are a lot of matches
-        if (m_matchCount % 50)
-            msleep(1);
     }
-
-    // emit all matches batched
-    const QUrl fileUrl = QUrl::fromUserInput(fileName);
-    emit matchesFound(fileUrl, matches);
+    return matches;
 }

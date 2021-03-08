@@ -48,7 +48,7 @@ KatePluginListView::KatePluginListView(QWidget *parent)
 
 void KatePluginListView::stateChanged(QTreeWidgetItem *item)
 {
-    emit stateChange(static_cast<KatePluginListItem *>(item), item->checkState(0) == Qt::Checked);
+    Q_EMIT stateChange(static_cast<KatePluginListItem *>(item), item->checkState(0) == Qt::Checked);
 }
 
 KateConfigPluginPage::KateConfigPluginPage(QWidget *parent, KateConfigDialog *dialog)
@@ -65,7 +65,8 @@ KateConfigPluginPage::KateConfigPluginPage(QWidget *parent, KateConfigDialog *di
     QStringList headers;
     headers << i18n("Name") << i18n("Description");
     listView->setHeaderLabels(headers);
-    listView->setWhatsThis(i18n("Here you can see all available Kate plugins. Those with a check mark are loaded, and will be loaded again the next time Kate is started."));
+    listView->setWhatsThis(
+        i18n("Here you can see all available Kate plugins. Those with a check mark are loaded, and will be loaded again the next time Kate is started."));
 
     KatePluginList &pluginList(KateApp::self()->pluginManager()->pluginList());
     for (auto &pluginInfo : pluginList) {
@@ -88,7 +89,7 @@ void KateConfigPluginPage::stateChange(KatePluginListItem *item, bool b)
         unloadPlugin(item);
     }
 
-    emit changed();
+    Q_EMIT changed();
 }
 
 void KateConfigPluginPage::loadPlugin(KatePluginListItem *item)

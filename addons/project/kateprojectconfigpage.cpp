@@ -9,6 +9,7 @@
 #include <KLocalizedString>
 #include <KUrlRequester>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QGroupBox>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -48,6 +49,7 @@ KateProjectConfigPage::KateProjectConfigPage(QWidget *parent, KateProjectPlugin 
     label->setText(i18n("Directory for index files"));
     vbox->addWidget(label);
     m_indexPath = new KUrlRequester(this);
+    m_indexPath->setMode(KFile::Directory | KFile::ExistingOnly | KFile::LocalOnly);
     m_indexPath->setToolTip(i18n("The system temporary directory is used if not specified, which may overflow for very large repositories"));
     vbox->addWidget(m_indexPath);
     vbox->addStretch(1);
@@ -65,9 +67,39 @@ KateProjectConfigPage::KateProjectConfigPage(QWidget *parent, KateProjectPlugin 
     group->setLayout(vbox);
     layout->addWidget(group);
 
-    layout->insertStretch(-1, 10);
+    /** Git specific **/
+    vbox = new QVBoxLayout;
+    group = new QGroupBox(i18nc("Groupbox title", "Git"), this);
+    m_cbGitStatusDiffNumStat = new QCheckBox(i18n("Show number of changed lines in git status"));
+    vbox->addWidget(m_cbGitStatusDiffNumStat);
 
-    reset();
+    auto hbox = new QHBoxLayout;
+    label = new QLabel(i18n("Single click action in the git status view"), this);
+    m_cmbSingleClick = new QComboBox(this);
+    m_cmbSingleClick->addItem(i18n("No Action"));
+    m_cmbSingleClick->addItem(i18n("Show Diff"));
+    m_cmbSingleClick->addItem(i18n("Open file"));
+    m_cmbSingleClick->addItem(i18n("Stage / Unstage"));
+    hbox->addWidget(label);
+    hbox->addWidget(m_cmbSingleClick);
+    vbox->addLayout(hbox);
+
+    hbox = new QHBoxLayout;
+    label = new QLabel(i18n("Double click action in the git status view"), this);
+    m_cmbDoubleClick = new QComboBox(this);
+    m_cmbDoubleClick->addItem(i18n("No Action"));
+    m_cmbDoubleClick->addItem(i18n("Show Diff"));
+    m_cmbDoubleClick->addItem(i18n("Open file"));
+    m_cmbDoubleClick->addItem(i18n("Stage / Unstage"));
+    hbox->addWidget(label);
+    hbox->addWidget(m_cmbDoubleClick);
+    vbox->addLayout(hbox);
+
+    vbox->addStretch(1);
+    group->setLayout(vbox);
+    layout->addWidget(group);
+
+    layout->insertStretch(-1, 10);
 
     connect(m_cbAutoGit, &QCheckBox::stateChanged, this, &KateProjectConfigPage::slotMyChanged);
     connect(m_cbAutoSubversion, &QCheckBox::stateChanged, this, &KateProjectConfigPage::slotMyChanged);
@@ -77,6 +109,12 @@ KateProjectConfigPage::KateProjectConfigPage(QWidget *parent, KateProjectPlugin 
     connect(m_indexPath, &KUrlRequester::urlSelected, this, &KateProjectConfigPage::slotMyChanged);
     connect(m_cbMultiProjectCompletion, &QCheckBox::stateChanged, this, &KateProjectConfigPage::slotMyChanged);
     connect(m_cbMultiProjectGoto, &QCheckBox::stateChanged, this, &KateProjectConfigPage::slotMyChanged);
+
+    connect(m_cbGitStatusDiffNumStat, &QCheckBox::stateChanged, this, &KateProjectConfigPage::slotMyChanged);
+    connect(m_cmbSingleClick, QOverload<int>::of(&QComboBox::activated), this, &KateProjectConfigPage::slotMyChanged);
+    connect(m_cmbDoubleClick, QOverload<int>::of(&QComboBox::activated), this, &KateProjectConfigPage::slotMyChanged);
+
+    reset();
 }
 
 QString KateProjectConfigPage::name() const
@@ -102,9 +140,15 @@ void KateProjectConfigPage::apply()
 
     m_changed = false;
 
-    m_plugin->setAutoRepository(m_cbAutoGit->checkState() == Qt::Checked, m_cbAutoSubversion->checkState() == Qt::Checked, m_cbAutoMercurial->checkState() == Qt::Checked);
+    m_plugin->setAutoRepository(m_cbAutoGit->checkState() == Qt::Checked,
+                                m_cbAutoSubversion->checkState() == Qt::Checked,
+                                m_cbAutoMercurial->checkState() == Qt::Checked);
     m_plugin->setIndex(m_cbIndexEnabled->checkState() == Qt::Checked, m_indexPath->url());
     m_plugin->setMultiProject(m_cbMultiProjectCompletion->checkState() == Qt::Checked, m_cbMultiProjectGoto->checkState() == Qt::Checked);
+
+    m_plugin->setGitStatusShowNumStat(m_cbGitStatusDiffNumStat->isChecked());
+    m_plugin->setSingleClickAction((ClickAction)m_cmbSingleClick->currentIndex());
+    m_plugin->setDoubleClickAction((ClickAction)m_cmbDoubleClick->currentIndex());
 }
 
 void KateProjectConfigPage::reset()
@@ -116,6 +160,11 @@ void KateProjectConfigPage::reset()
     m_indexPath->setUrl(m_plugin->getIndexDirectory());
     m_cbMultiProjectCompletion->setCheckState(m_plugin->multiProjectCompletion() ? Qt::Checked : Qt::Unchecked);
     m_cbMultiProjectGoto->setCheckState(m_plugin->multiProjectGoto() ? Qt::Checked : Qt::Unchecked);
+
+    m_cbGitStatusDiffNumStat->setChecked(m_plugin->showGitStatusWithNumStat());
+    m_cmbSingleClick->setCurrentIndex((int)m_plugin->singleClickAcion());
+    m_cmbDoubleClick->setCurrentIndex((int)m_plugin->doubleClickAcion());
+
     m_changed = false;
 }
 
@@ -127,5 +176,5 @@ void KateProjectConfigPage::defaults()
 void KateProjectConfigPage::slotMyChanged()
 {
     m_changed = true;
-    emit changed();
+    Q_EMIT changed();
 }

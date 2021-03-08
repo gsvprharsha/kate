@@ -28,12 +28,15 @@ QString toString(KateExternalTool::SaveMode saveMode)
 
 KateExternalTool::SaveMode toSaveMode(const QString &mode)
 {
-    if (mode == QStringLiteral("None"))
+    if (mode == QStringLiteral("None")) {
         return KateExternalTool::SaveMode::None;
-    if (mode == QStringLiteral("CurrentDocument"))
+    }
+    if (mode == QStringLiteral("CurrentDocument")) {
         return KateExternalTool::SaveMode::CurrentDocument;
-    if (mode == QStringLiteral("AllDocuments"))
+    }
+    if (mode == QStringLiteral("AllDocuments")) {
         return KateExternalTool::SaveMode::AllDocuments;
+    }
     return KateExternalTool::SaveMode::None;
 }
 
@@ -63,22 +66,30 @@ QString toString(KateExternalTool::OutputMode outputMode)
 
 KateExternalTool::OutputMode toOutputMode(const QString &mode)
 {
-    if (mode == QStringLiteral("Ignore"))
+    if (mode == QStringLiteral("Ignore")) {
         return KateExternalTool::OutputMode::Ignore;
-    if (mode == QStringLiteral("InsertAtCursor"))
+    }
+    if (mode == QStringLiteral("InsertAtCursor")) {
         return KateExternalTool::OutputMode::InsertAtCursor;
-    if (mode == QStringLiteral("ReplaceSelectedText"))
+    }
+    if (mode == QStringLiteral("ReplaceSelectedText")) {
         return KateExternalTool::OutputMode::ReplaceSelectedText;
-    if (mode == QStringLiteral("ReplaceCurrentDocument"))
+    }
+    if (mode == QStringLiteral("ReplaceCurrentDocument")) {
         return KateExternalTool::OutputMode::ReplaceCurrentDocument;
-    if (mode == QStringLiteral("AppendToCurrentDocument"))
+    }
+    if (mode == QStringLiteral("AppendToCurrentDocument")) {
         return KateExternalTool::OutputMode::AppendToCurrentDocument;
-    if (mode == QStringLiteral("InsertInNewDocument"))
+    }
+    if (mode == QStringLiteral("InsertInNewDocument")) {
         return KateExternalTool::OutputMode::InsertInNewDocument;
-    if (mode == QStringLiteral("CopyToClipboard"))
+    }
+    if (mode == QStringLiteral("CopyToClipboard")) {
         return KateExternalTool::OutputMode::CopyToClipboard;
-    if (mode == QStringLiteral("DisplayInPane"))
+    }
+    if (mode == QStringLiteral("DisplayInPane")) {
         return KateExternalTool::OutputMode::DisplayInPane;
+    }
     return KateExternalTool::OutputMode::Ignore;
 }
 }
@@ -112,21 +123,30 @@ void KateExternalTool::load(const KConfigGroup &cg)
     hasexec = checkExec();
 }
 
+static inline void writeStringEntry(KConfigGroup &cg, const char *key, const QString &value)
+{
+    if (!value.isEmpty()) {
+        cg.writeEntry(key, value);
+    }
+}
+
 void KateExternalTool::save(KConfigGroup &cg) const
 {
-    cg.writeEntry("category", category);
-    cg.writeEntry("name", name);
-    cg.writeEntry("icon", icon);
-    cg.writeEntry("executable", executable);
-    cg.writeEntry("arguments", arguments);
-    cg.writeEntry("input", input);
-    cg.writeEntry("workingDir", workingDir);
-    cg.writeEntry("mimetypes", mimetypes);
-    cg.writeEntry("actionName", actionName);
-    cg.writeEntry("cmdname", cmdname);
-    cg.writeEntry("save", toString(saveMode));
+    writeStringEntry(cg, "category", category);
+    writeStringEntry(cg, "name", name);
+    writeStringEntry(cg, "icon", icon);
+    writeStringEntry(cg, "executable", executable);
+    writeStringEntry(cg, "arguments", arguments);
+    writeStringEntry(cg, "input", input);
+    writeStringEntry(cg, "workingDir", workingDir);
+    if (!mimetypes.empty()) {
+        cg.writeEntry("mimetypes", mimetypes);
+    }
+    writeStringEntry(cg, "actionName", actionName);
+    writeStringEntry(cg, "cmdname", cmdname);
+    writeStringEntry(cg, "save", toString(saveMode));
+    writeStringEntry(cg, "output", toString(outputMode));
     cg.writeEntry("reload", reload);
-    cg.writeEntry("output", toString(outputMode));
 }
 
 QString KateExternalTool::translatedName() const
@@ -141,8 +161,9 @@ QString KateExternalTool::translatedCategory() const
 
 bool operator==(const KateExternalTool &lhs, const KateExternalTool &rhs)
 {
-    return lhs.category == rhs.category && lhs.name == rhs.name && lhs.icon == rhs.icon && lhs.executable == rhs.executable && lhs.arguments == rhs.arguments && lhs.input == rhs.input && lhs.workingDir == rhs.workingDir &&
-        lhs.mimetypes == rhs.mimetypes && lhs.actionName == rhs.actionName && lhs.cmdname == rhs.cmdname && lhs.saveMode == rhs.saveMode && lhs.reload == rhs.reload && lhs.outputMode == rhs.outputMode;
+    return lhs.category == rhs.category && lhs.name == rhs.name && lhs.icon == rhs.icon && lhs.executable == rhs.executable && lhs.arguments == rhs.arguments
+        && lhs.input == rhs.input && lhs.workingDir == rhs.workingDir && lhs.mimetypes == rhs.mimetypes && lhs.actionName == rhs.actionName
+        && lhs.cmdname == rhs.cmdname && lhs.saveMode == rhs.saveMode && lhs.reload == rhs.reload && lhs.outputMode == rhs.outputMode;
 }
 
 // kate: space-indent on; indent-width 4; replace-tabs on;

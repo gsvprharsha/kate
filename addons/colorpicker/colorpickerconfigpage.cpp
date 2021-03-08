@@ -8,10 +8,10 @@
 
 #include "colorpickerconfigpage.h"
 
-#include <KTextEditor/ConfigPage>
-#include <KLocalizedString>
 #include <KConfigGroup>
+#include <KLocalizedString>
 #include <KSharedConfig>
+#include <KTextEditor/ConfigPage>
 
 #include <QApplication>
 #include <QCheckBox>
@@ -36,7 +36,8 @@ KateColorPickerConfigPage::KateColorPickerConfigPage(QWidget *parent, KateColorP
     layout->setContentsMargins(0, 0, 0, 0);
 
     chkNamedColors = new QCheckBox(i18n("Show preview for known color names"), this);
-    chkNamedColors->setToolTip(i18n("Also show the color picker for known color names (e.g. skyblue).\nSee https://www.w3.org/TR/SVG11/types.html#ColorKeywords for the list of colors."));
+    chkNamedColors->setToolTip(i18n(
+        "Also show the color picker for known color names (e.g. skyblue).\nSee https://www.w3.org/TR/SVG11/types.html#ColorKeywords for the list of colors."));
     layout->addWidget(chkNamedColors);
 
     chkPreviewAfterColor = new QCheckBox(i18n("Place preview after text color"), this);
@@ -88,10 +89,8 @@ QIcon KateColorPickerConfigPage::icon() const
 void KateColorPickerConfigPage::apply()
 {
     if (!m_colorConfigChanged) {
-        // apply() gets called when the "Apply" or "OK" button is pressed
-        // this means that if a user presses "Apply" THEN "OK", the config is updated twice
-        // since the reconstruction of the regex (and the regeneration of color note positions) is expensive,
-        // we only update on the first call to apply() before changes are made again
+        // apply() gets called when the "Apply" or "OK" button is pressed. This means that if a user presses "Apply" THEN "OK", the config is updated twice
+        // Since the the regeneration of color note positions is expensive, we only update on the first call to apply() before changes are made again
         return;
     }
 
@@ -115,10 +114,10 @@ void KateColorPickerConfigPage::apply()
 void KateColorPickerConfigPage::reset()
 {
     KConfigGroup config(KSharedConfig::openConfig(), "ColorPicker");
-    chkNamedColors->setChecked(config.readEntry("NamedColors", true));
+    chkNamedColors->setChecked(config.readEntry("NamedColors", false));
     chkPreviewAfterColor->setChecked(config.readEntry("PreviewAfterColor", true));
 
-    QList<int> enabledHexLengths = config.readEntry("HexLengths", QList<int>{12, 9, 8, 6, 3});
+    QList<int> enabledHexLengths = config.readEntry("HexLengths", QList<int>{12, 9, 6, 3});
     for (const int hexLength : chkHexLengths.keys()) {
         chkHexLengths[hexLength]->setChecked(enabledHexLengths.contains(hexLength));
     }

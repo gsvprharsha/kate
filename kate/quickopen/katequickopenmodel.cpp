@@ -1,6 +1,7 @@
 /*  SPDX-License-Identifier: LGPL-2.0-or-later
 
     SPDX-FileCopyrightText: 2018 Tomaz Canabrava <tcanabrava@kde.org>
+    SPDX-FileCopyrightText: 2021 Waqar Ahmed <waqar.17a@gmail.com>
 
     SPDX-License-Identifier: LGPL-2.0-or-later
 */
@@ -9,17 +10,16 @@
 
 #include "kateapp.h"
 #include "katemainwindow.h"
-#include "kateviewmanager.h"
 
 #include <ktexteditor/document.h>
 #include <ktexteditor/view.h>
 
 #include <QFileInfo>
+#include <QIcon>
 #include <QMimeDatabase>
 
-KateQuickOpenModel::KateQuickOpenModel(KateMainWindow *mainWindow, QObject *parent)
+KateQuickOpenModel::KateQuickOpenModel(QObject *parent)
     : QAbstractTableModel(parent)
-    , m_mainWindow(mainWindow)
 {
 }
 
@@ -43,93 +43,92 @@ QVariant KateQuickOpenModel::data(const QModelIndex &idx, int role) const
         return {};
     }
 
-    auto entry = m_modelEntries.at(idx.row());
-    if (role == Qt::DisplayRole) {
-        switch (idx.column()) {
-        case Columns::FileName:
-            return QString(entry.fileName + QStringLiteral("{[split]}") + entry.filePath);
-        }
-    } else if (role == Qt::FontRole) {
+    const ModelEntry &entry = m_modelEntries.at(idx.row());
+    switch (role) {
+    case Qt::DisplayRole:
+    case Role::FileName:
+        return entry.fileName;
+    case Role::FilePath:
+        return QString(entry.filePath).remove(m_projectBase);
+    case Qt::FontRole: {
         if (entry.bold) {
             QFont font;
             font.setBold(true);
             return font;
         }
-    } else if (role == Qt::DecorationRole) {
+        return {};
+    }
+    case Qt::DecorationRole:
         return QIcon::fromTheme(QMimeDatabase().mimeTypeForFile(entry.fileName, QMimeDatabase::MatchExtension).iconName());
-    } else if (role == Qt::UserRole) {
-        return entry.url;
-    } else if (role == Role::Score) {
+    case Qt::UserRole:
+        return entry.url.isEmpty() ? QUrl::fromLocalFile(entry.filePath) : entry.url;
+    case Role::Score:
         return entry.score;
+    default:
+        return {};
     }
 
     return {};
 }
 
-void KateQuickOpenModel::refresh()
+void KateQuickOpenModel::refresh(KateMainWindow *mainWindow)
 {
-    QObject *projectView = m_mainWindow->pluginView(QStringLiteral("kateprojectplugin"));
-    const QList<KTextEditor::View *> sortedViews = m_mainWindow->viewManager()->sortedViews();
+    QObject *projectView = mainWindow->pluginView(QStringLiteral("kateprojectplugin"));
+    const QList<KTextEditor::View *> sortedViews = mainWindow->viewManager()->sortedViews();
     const QList<KTextEditor::Document *> openDocs = KateApp::self()->documentManager()->documentList();
-    const QStringList projectDocs = projectView ? (m_listMode == CurrentProject ? projectView->property("projectFiles") : projectView->property("allProjectsFiles")).toStringList() : QStringList();
+    const QStringList projectDocs = projectView
+        ? (m_listMode == CurrentProject ? projectView->property("projectFiles") : projectView->property("allProjectsFiles")).toStringList()
+        : QStringList();
     const QString projectBase = [this, projectView]() -> QString {
-        if (!projectView)
+        if (!projectView) {
             return QString();
+        }
         QString ret;
         if (m_listMode == CurrentProject) {
             ret = projectView->property("projectBaseDir").toString();
         } else {
             ret = projectView->property("allProjectsCommonBaseDir").toString();
         }
-        if (!ret.endsWith(QLatin1Char('/')))
+        if (!ret.endsWith(QLatin1Char('/'))) {
             ret.append(QLatin1Char('/'));
+        }
         return ret;
     }();
 
-    QVector<ModelEntry> allDocuments;
-    allDocuments.reserve(sortedViews.size() + openDocs.size() + projectDocs.size());
+    m_projectBase = projectBase;
 
-    size_t sort_id = static_cast<size_t>(-1);
+    QVector<ModelEntry> allDocuments;
+    allDocuments.reserve(sortedViews.size() + projectDocs.size());
+
+    QSet<QString> openedDocUrls;
+    openedDocUrls.reserve(sortedViews.size());
+
     for (auto *view : qAsConst(sortedViews)) {
         auto doc = view->document();
-        allDocuments.push_back({doc->url(), doc->documentName(), doc->url().toDisplayString(QUrl::NormalizePathSegments | QUrl::PreferLocalFile).remove(projectBase), true, sort_id--, -1});
+        auto path = doc->url().toString(QUrl::NormalizePathSegments | QUrl::PreferLocalFile);
+        openedDocUrls.insert(path);
+        allDocuments.push_back({doc->url(), doc->documentName(), path, true, -1});
     }
 
     for (auto *doc : qAsConst(openDocs)) {
-        const auto normalizedUrl = doc->url().toString(QUrl::NormalizePathSegments | QUrl::PreferLocalFile).remove(projectBase);
-        allDocuments.push_back({doc->url(), doc->documentName(), normalizedUrl, true, 0, -1});
+        auto path = doc->url().toString(QUrl::NormalizePathSegments | QUrl::PreferLocalFile);
+        if (openedDocUrls.contains(path)) {
+            continue;
+        }
+        openedDocUrls.insert(path);
+        allDocuments.push_back({doc->url(), doc->documentName(), path, true, -1});
     }
 
     for (const auto &file : qAsConst(projectDocs)) {
         QFileInfo fi(file);
-        const auto localFile = QUrl::fromLocalFile(fi.absoluteFilePath());
-        allDocuments.push_back({localFile, fi.fileName(), fi.filePath().remove(projectBase), false, 0, -1});
+        // projectDocs items have full path already, reuse that
+        if (openedDocUrls.contains(file)) {
+            continue;
+        }
+        allDocuments.push_back({QUrl(), fi.fileName(), file, false, -1});
     }
 
-    /** Sort the arrays by filePath. */
-    std::stable_sort(std::begin(allDocuments), std::end(allDocuments), [](const ModelEntry &a, const ModelEntry &b) {
-        return a.filePath < b.filePath;
-    });
-
-    /** remove Duplicates.
-     * Note that the stable_sort above guarantees that the items that the
-     * bold/sort_id fields of the items added first are correctly preserved.
-     */
-    allDocuments.erase(std::unique(allDocuments.begin(),
-                                   allDocuments.end(),
-                                   [](const ModelEntry &a, const ModelEntry &b) {
-                                       return a.url == b.url;
-                                   }),
-                       std::end(allDocuments));
-
-    /** sort the arrays via boldness (open or not */
-    std::stable_sort(std::begin(allDocuments), std::end(allDocuments), [](const ModelEntry &a, const ModelEntry &b) {
-        if (a.bold == b.bold)
-            return a.sort_id > b.sort_id;
-        return a.bold > b.bold;
-    });
-
     beginResetModel();
-    m_modelEntries = allDocuments;
+    m_modelEntries = std::move(allDocuments);
     endResetModel();
 }

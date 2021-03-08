@@ -69,21 +69,25 @@ void PluginKateTextFilter::slotFilterReceivedStdout()
 void PluginKateTextFilter::slotFilterReceivedStderr()
 {
     const QString block = QString::fromLocal8Bit(m_pFilterProcess->readAllStandardError());
-    if (mergeOutput)
+    if (mergeOutput) {
         m_strFilterOutput += block;
-    else
+    } else {
         m_stderrOutput += block;
+    }
 }
 
 void PluginKateTextFilter::slotFilterProcessExited(int, QProcess::ExitStatus)
 {
     KTextEditor::View *kv(KTextEditor::Editor::instance()->application()->activeMainWindow()->activeView());
-    if (!kv)
+    if (!kv) {
         return;
+    }
 
     // Is there any error output to display?
     if (!mergeOutput && !m_stderrOutput.isEmpty()) {
-        QPointer<KTextEditor::Message> message = new KTextEditor::Message(xi18nc("@info", "<title>Result of:</title><nl /><pre><code>$ %1\n<nl />%2</code></pre>", m_last_command, m_stderrOutput), KTextEditor::Message::Error);
+        QPointer<KTextEditor::Message> message =
+            new KTextEditor::Message(xi18nc("@info", "<title>Result of:</title><nl /><pre><code>$ %1\n<nl />%2</code></pre>", m_last_command, m_stderrOutput),
+                                     KTextEditor::Message::Error);
         message->setWordWrap(true);
         message->setAutoHide(1000);
         kv->document()->postMessage(message);
@@ -95,8 +99,9 @@ void PluginKateTextFilter::slotFilterProcessExited(int, QProcess::ExitStatus)
     }
 
     // Do not even try to change the document if no result collected...
-    if (m_strFilterOutput.isEmpty())
+    if (m_strFilterOutput.isEmpty()) {
         return;
+    }
 
     KTextEditor::Document::EditingTransaction transaction(kv->document());
 
@@ -139,12 +144,14 @@ void PluginKateTextFilter::slotEditFilter()
                            i18n("Access Restrictions"));
         return;
     }
-    if (!KTextEditor::Editor::instance()->application()->activeMainWindow())
+    if (!KTextEditor::Editor::instance()->application()->activeMainWindow()) {
         return;
+    }
 
     KTextEditor::View *kv(KTextEditor::Editor::instance()->application()->activeMainWindow()->activeView());
-    if (!kv)
+    if (!kv) {
         return;
+    }
 
     QDialog dialog(KTextEditor::Editor::instance()->application()->activeMainWindow()->window());
 
@@ -191,7 +198,10 @@ void PluginKateTextFilter::runFilter(KTextEditor::View *kv, const QString &filte
 
         connect(m_pFilterProcess, &KProcess::readyReadStandardError, this, &PluginKateTextFilter::slotFilterReceivedStderr);
 
-        connect(m_pFilterProcess, static_cast<void (KProcess::*)(int, KProcess::ExitStatus)>(&KProcess::finished), this, &PluginKateTextFilter::slotFilterProcessExited);
+        connect(m_pFilterProcess,
+                static_cast<void (KProcess::*)(int, KProcess::ExitStatus)>(&KProcess::finished),
+                this,
+                &PluginKateTextFilter::slotFilterProcessExited);
     }
     m_pFilterProcess->setOutputChannelMode(mergeOutput ? KProcess::MergedChannels : KProcess::SeparateChannels);
 

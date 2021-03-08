@@ -13,7 +13,7 @@
 
 #include <ktexteditor/document.h>
 
-#include <ThreadWeaver/Queue>
+#include <json_utils.h>
 
 #include <QDir>
 #include <QFile>
@@ -25,10 +25,10 @@
 #include <QPlainTextDocumentLayout>
 #include <utility>
 
-KateProject::KateProject(ThreadWeaver::Queue *weaver, KateProjectPlugin *plugin)
+KateProject::KateProject(QThreadPool &threadPool, KateProjectPlugin *plugin)
     : m_notesDocument(nullptr)
     , m_untrackedDocumentsRoot(nullptr)
-    , m_weaver(weaver)
+    , m_threadPool(threadPool)
     , m_plugin(plugin)
 {
 }
@@ -73,22 +73,38 @@ bool KateProject::reload(bool force)
     return load(m_globalProject, force);
 }
 
-QVariantMap KateProject::readProjectFile() const
+/**
+ * Read a JSON document from file.
+ *
+ * In case of an error, the returned object verifies isNull() is true.
+ */
+QJsonDocument KateProject::readJSONFile(const QString &fileName)
 {
-    QFile file(m_fileName);
+    QFile file(fileName);
 
-    if (!file.open(QFile::ReadOnly)) {
-        return QVariantMap();
+    if (!file.exists() || !file.open(QFile::ReadOnly)) {
+        return QJsonDocument();
     }
 
     /**
      * parse the whole file, bail out again on error!
      */
     const QByteArray jsonData = file.readAll();
-    QJsonParseError parseError {};
-    QJsonDocument project(QJsonDocument::fromJson(jsonData, &parseError));
+    QJsonParseError parseError{};
+    QJsonDocument document(QJsonDocument::fromJson(jsonData, &parseError));
 
     if (parseError.error != QJsonParseError::NoError) {
+        return QJsonDocument();
+    }
+
+    return document;
+}
+
+QVariantMap KateProject::readProjectFile() const
+{
+    QJsonDocument project(readJSONFile(m_fileName));
+    // bail out on error
+    if (project.isNull()) {
         return QVariantMap();
     }
 
@@ -101,6 +117,15 @@ QVariantMap KateProject::readProjectFile() const
     if (project.isObject()) {
         auto dir = QFileInfo(m_fileName).dir();
         auto object = project.object();
+
+        // if there are local settings (.kateproject.local), override values
+        {
+            const auto localSettings = readJSONFile(projectLocalFileName(QStringLiteral("local")));
+            if (!localSettings.isNull() && localSettings.isObject()) {
+                object = json::merge(object, localSettings.object());
+            }
+        }
+
         auto name = object[QStringLiteral("name")];
         if (name.isUndefined() || name.isNull()) {
             name = dir.dirName();
@@ -111,7 +136,7 @@ QVariantMap KateProject::readProjectFile() const
             // but it will be sorted out upon loading anyway
             QJsonArray afiles;
             for (const auto &t : {QStringLiteral("git"), QStringLiteral("hg"), QStringLiteral("svn"), QStringLiteral("darcs")}) {
-                afiles.push_back(QJsonObject {{t, true}});
+                afiles.push_back(QJsonObject{{t, true}});
             }
             files = afiles;
         }
@@ -159,7 +184,7 @@ bool KateProject::load(const QVariantMap &globalProject, bool force)
     m_projectMap = globalProject;
 
     // emit that we changed stuff
-    emit projectMapChanged();
+    Q_EMIT projectMapChanged();
 
     // trigger loading of project in background thread
     QString indexDir;
@@ -170,16 +195,19 @@ bool KateProject::load(const QVariantMap &globalProject, bool force)
             indexDir = QDir::tempPath();
         }
     }
+
+    // let's run the stuff in our own thread pool
+    // do manual queued connect, as only run() is done in extra thread, object stays in this one
     auto w = new KateProjectWorker(m_baseDir, indexDir, m_projectMap, force);
-    connect(w, &KateProjectWorker::loadDone, this, &KateProject::loadProjectDone);
-    connect(w, &KateProjectWorker::loadIndexDone, this, &KateProject::loadIndexDone);
-    m_weaver->stream() << w;
+    connect(w, &KateProjectWorker::loadDone, this, &KateProject::loadProjectDone, Qt::QueuedConnection);
+    connect(w, &KateProjectWorker::loadIndexDone, this, &KateProject::loadIndexDone, Qt::QueuedConnection);
+    m_threadPool.start(w);
 
     // we are done here
     return true;
 }
 
-void KateProject::loadProjectDone(const KateProjectSharedQStandardItem &topLevel, KateProjectSharedQMapStringItem file2Item)
+void KateProject::loadProjectDone(const KateProjectSharedQStandardItem &topLevel, KateProjectSharedQHashStringItem file2Item)
 {
     m_model.clear();
     m_model.invisibleRootItem()->appendColumn(topLevel->takeColumn(0));
@@ -194,7 +222,7 @@ void KateProject::loadProjectDone(const KateProjectSharedQStandardItem &topLevel
         registerDocument(i.key());
     }
 
-    emit modelChanged();
+    Q_EMIT modelChanged();
 }
 
 void KateProject::loadIndexDone(KateProjectSharedProjectIndex projectIndex)
@@ -207,7 +235,7 @@ void KateProject::loadIndexDone(KateProjectSharedProjectIndex projectIndex)
     /**
      * notify external world that data is available
      */
-    emit indexChanged();
+    Q_EMIT indexChanged();
 }
 
 QString KateProject::projectLocalFileName(const QString &suffix) const
@@ -223,7 +251,7 @@ QString KateProject::projectLocalFileName(const QString &suffix) const
     /**
      * compute full file name
      */
-    return m_baseDir + QStringLiteral(".kateproject.") + suffix;
+    return QDir(m_baseDir).filePath(QStringLiteral(".kateproject.") + suffix);
 }
 
 QTextDocument *KateProject::notesDocument()
@@ -255,7 +283,9 @@ QTextDocument *KateProject::notesDocument()
     QFile inFile(notesFileName);
     if (inFile.open(QIODevice::ReadOnly)) {
         QTextStream inStream(&inFile);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
         inStream.setCodec("UTF-8");
+#endif
         m_notesDocument->setPlainText(inStream.readAll());
     }
 
@@ -299,7 +329,9 @@ void KateProject::saveNotesDocument()
     QFile outFile(projectLocalFileName(QStringLiteral("notes")));
     if (outFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         QTextStream outStream(&outFile);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
         outStream.setCodec("UTF-8");
+#endif
         outStream << content;
     }
 }
@@ -337,24 +369,27 @@ void KateProject::registerDocument(KTextEditor::Document *document)
     KateProjectItem *item = itemForFile(document->url().toLocalFile());
 
     // if we got one, we are done, else create a dummy!
+    // clang-format off
     if (item) {
         disconnect(document, &KTextEditor::Document::modifiedChanged, this, &KateProject::slotModifiedChanged);
         disconnect(document,
-                   SIGNAL(modifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
+                   SIGNAL(modifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
                    this,
-                   SLOT(slotModifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+                   SLOT(slotModifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
         item->slotModifiedChanged(document);
 
-        /*FIXME    item->slotModifiedOnDisk(document,document->isModified(),qobject_cast<KTextEditor::ModificationInterface*>(document)->modifiedOnDisk()); FIXME*/
+        /*FIXME    item->slotModifiedOnDisk(document,document->isModified(),qobject_cast<KTextEditor::ModificationInterface*>(document)->modifiedOnDisk());
+         * FIXME*/
 
         connect(document, &KTextEditor::Document::modifiedChanged, this, &KateProject::slotModifiedChanged);
         connect(document,
-                SIGNAL(modifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
+                SIGNAL(modifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
                 this,
-                SLOT(slotModifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+                SLOT(slotModifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
 
         return;
     }
+    // clang-format on
 
     registerUntrackedDocument(document);
 }
@@ -370,13 +405,14 @@ void KateProject::registerUntrackedDocument(KTextEditor::Document *document)
     // create document item
     QFileInfo fileInfo(document->url().toLocalFile());
     KateProjectItem *fileItem = new KateProjectItem(KateProjectItem::File, fileInfo.fileName());
-    fileItem->setData(document->url().toLocalFile(), Qt::ToolTipRole);
     fileItem->slotModifiedChanged(document);
     connect(document, &KTextEditor::Document::modifiedChanged, this, &KateProject::slotModifiedChanged);
+    // clang-format off
     connect(document,
-            SIGNAL(modifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
+            SIGNAL(modifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
             this,
-            SLOT(slotModifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+            SLOT(slotModifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+    // clang-format on
 
     bool inserted = false;
     for (int i = 0; i < m_untrackedDocumentsRoot->rowCount(); ++i) {
@@ -394,7 +430,7 @@ void KateProject::registerUntrackedDocument(KTextEditor::Document *document)
     fileItem->setData(QVariant(true), Qt::UserRole + 3);
 
     if (!m_file2Item) {
-        m_file2Item = KateProjectSharedQMapStringItem(new QMap<QString, KateProjectItem *>());
+        m_file2Item = KateProjectSharedQHashStringItem(new QHash<QString, KateProjectItem *>());
     }
     (*m_file2Item)[document->url().toLocalFile()] = fileItem;
 }

@@ -32,8 +32,8 @@
 K_PLUGIN_FACTORY_WITH_JSON(KateBtBrowserFactory, "katebacktracebrowserplugin.json", registerPlugin<KateBtBrowserPlugin>();)
 
 KateBtBrowserPlugin *KateBtBrowserPlugin::s_self = nullptr;
-static QStringList fileExtensions = QStringList() << QStringLiteral("*.cpp") << QStringLiteral("*.cxx") << QStringLiteral("*.c") << QStringLiteral("*.cc") << QStringLiteral("*.h") << QStringLiteral("*.hpp") << QStringLiteral("*.hxx")
-                                                  << QStringLiteral("*.moc");
+static QStringList fileExtensions = QStringList() << QStringLiteral("*.cpp") << QStringLiteral("*.cxx") << QStringLiteral("*.c") << QStringLiteral("*.cc")
+                                                  << QStringLiteral("*.h") << QStringLiteral("*.hpp") << QStringLiteral("*.hxx") << QStringLiteral("*.moc");
 
 KateBtBrowserPlugin::KateBtBrowserPlugin(QObject *parent, const QList<QVariant> &)
     : KTextEditor::Plugin(parent)
@@ -88,7 +88,7 @@ void KateBtBrowserPlugin::startIndexer()
     indexer.setSearchPaths(cg.readEntry("search-folders", QStringList()));
     indexer.setFilter(cg.readEntry("file-extensions", fileExtensions));
     indexer.start();
-    emit newStatus(i18n("Indexing files..."));
+    Q_EMIT newStatus(i18n("Indexing files..."));
 }
 
 int KateBtBrowserPlugin::configPages() const
@@ -110,7 +110,11 @@ KateBtBrowserPluginView::KateBtBrowserPluginView(KateBtBrowserPlugin *plugin, KT
     , m_plugin(plugin)
 {
     // init console
-    QWidget *toolview = mainWindow->createToolView(plugin, QStringLiteral("kate_private_plugin_katebacktracebrowserplugin"), KTextEditor::MainWindow::Bottom, QIcon::fromTheme(QStringLiteral("tools-report-bug")), i18n("Backtrace Browser"));
+    QWidget *toolview = mainWindow->createToolView(plugin,
+                                                   QStringLiteral("kate_private_plugin_katebacktracebrowserplugin"),
+                                                   KTextEditor::MainWindow::Bottom,
+                                                   QIcon::fromTheme(QStringLiteral("tools-report-bug")),
+                                                   i18n("Backtrace Browser"));
     m_widget = new KateBtBrowserWidget(mainWindow, toolview);
 
     connect(plugin, &KateBtBrowserPlugin::newStatus, m_widget, &KateBtBrowserWidget::setStatus);
@@ -230,7 +234,7 @@ void KateBtBrowserWidget::itemActivated(QTreeWidgetItem *item, int column)
         }
 
         if (!path.isEmpty() && QFile::exists(path)) {
-            KTextEditor::View *kv = mw->openUrl(QUrl(path));
+            KTextEditor::View *kv = mw->openUrl(QUrl::fromLocalFile(path));
             kv->setCursorPosition(KTextEditor::Cursor(line - 1, 0));
             kv->setFocus();
             setStatus(i18n("Opened file: %1", file));
@@ -328,12 +332,13 @@ void KateBtConfigWidget::defaults()
 void KateBtConfigWidget::add()
 {
     QDir url(edtUrl->lineEdit()->text());
-    if (url.exists())
+    if (url.exists()) {
         if (lstFolders->findItems(url.absolutePath(), Qt::MatchExactly).empty()) {
             lstFolders->addItem(url.absolutePath());
-            emit changed();
+            Q_EMIT changed();
             m_changed = true;
         }
+    }
 }
 
 void KateBtConfigWidget::remove()
@@ -341,14 +346,14 @@ void KateBtConfigWidget::remove()
     QListWidgetItem *item = lstFolders->currentItem();
     if (item) {
         delete item;
-        emit changed();
+        Q_EMIT changed();
         m_changed = true;
     }
 }
 
 void KateBtConfigWidget::textChanged()
 {
-    emit changed();
+    Q_EMIT changed();
     m_changed = true;
 }
 

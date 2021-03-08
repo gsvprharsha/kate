@@ -1,6 +1,7 @@
 /*  SPDX-License-Identifier: LGPL-2.0-or-later
 
     SPDX-FileCopyrightText: 2007, 2009 Joseph Wenninger <jowenn@kde.org>
+    SPDX-FileCopyrightText: 2021 Waqar Ahmed <waqar.17a@gmail.com>
 
     SPDX-License-Identifier: LGPL-2.0-or-later
 */
@@ -35,7 +36,7 @@ public:
      * update state
      * will fill model with current open documents, project documents, ...
      */
-    void update();
+    void update(KateMainWindow *mainWindow);
     void updateViewGeometry();
 
 protected:
@@ -50,8 +51,6 @@ private Q_SLOTS:
      */
     void slotReturnPressed();
 
-    void slotfilterModeChanged(FilterModes mode);
-
     void slotListModeChanged(KateQuickOpenModelList mode);
 
 private:
@@ -59,7 +58,6 @@ private:
     QTreeView *m_listView;
     QuickOpenLineEdit *m_inputLine;
     QuickOpenStyleDelegate *m_styleDelegate;
-    FilterModes m_filterMode;
 
     /**
      * our model we search in

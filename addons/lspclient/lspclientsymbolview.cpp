@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
     SPDX-FileCopyrightText: 2019 Christoph Cullmann <cullmann@kde.org>
 
@@ -52,11 +51,15 @@ public:
     {
         // get updated
         m_changeTimer.setSingleShot(true);
-        auto ch = [this]() { emit newState(m_mainWindow->activeView(), TextChanged); };
+        auto ch = [this]() {
+            Q_EMIT newState(m_mainWindow->activeView(), TextChanged);
+        };
         connect(&m_changeTimer, &QTimer::timeout, this, ch);
 
         m_motionTimer.setSingleShot(true);
-        auto mh = [this]() { emit newState(m_mainWindow->activeView(), LineChanged); };
+        auto mh = [this]() {
+            Q_EMIT newState(m_mainWindow->activeView(), LineChanged);
+        };
         connect(&m_motionTimer, &QTimer::timeout, this, mh);
 
         // track views
@@ -75,7 +78,7 @@ public:
             if (m_change > 0 && view->document()) {
                 connect(view->document(), &KTextEditor::Document::textChanged, this, &self_type::textChanged, Qt::UniqueConnection);
             }
-            emit newState(view, ViewChanged);
+            Q_EMIT newState(view, ViewChanged);
             m_oldCursorLine = view->cursorPosition().line();
         }
     }
@@ -115,8 +118,9 @@ public:
 
     void setFilterString(const QString &string)
     {
+        beginResetModel();
         m_pattern = string;
-        invalidateFilter();
+        endResetModel();
     }
 
 protected:
@@ -129,8 +133,9 @@ protected:
 
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override
     {
-        if (m_pattern.isEmpty())
+        if (m_pattern.isEmpty()) {
             return true;
+        }
 
         int score = 0;
         const auto idx = sourceModel()->index(sourceRow, 0, sourceParent);
@@ -201,7 +206,11 @@ public:
         , m_serverManager(std::move(manager))
         , m_outline(new QStandardItemModel())
     {
-        m_toolview.reset(m_mainWindow->createToolView(plugin, QStringLiteral("lspclient_symbol_outline"), KTextEditor::MainWindow::Right, QIcon::fromTheme(QStringLiteral("code-context")), i18n("LSP Client Symbol Outline")));
+        m_toolview.reset(m_mainWindow->createToolView(plugin,
+                                                      QStringLiteral("lspclient_symbol_outline"),
+                                                      KTextEditor::MainWindow::Right,
+                                                      QIcon::fromTheme(QStringLiteral("code-context")),
+                                                      i18n("LSP Client Symbol Outline")));
 
         m_symbols = new QTreeView(m_toolview.data());
         m_symbols->setFocusPolicy(Qt::NoFocus);
@@ -255,7 +264,9 @@ public:
         // get updated
         m_viewTracker.reset(LSPClientViewTracker::new_(plugin, mainWin, 500, 100));
         connect(m_viewTracker.data(), &LSPClientViewTracker::newState, this, &self_type::onViewState);
-        connect(m_serverManager.data(), &LSPClientServerManager::serverChanged, this, [this]() { refresh(false); });
+        connect(m_serverManager.data(), &LSPClientServerManager::serverChanged, this, [this]() {
+            refresh(false);
+        });
 
         // limit cached models; will not go beyond capacity set here
         m_models.reserve(MAX_MODELS + 1);
@@ -308,8 +319,9 @@ public:
             case LSPSymbolKind::Module:
             case LSPSymbolKind::Namespace:
             case LSPSymbolKind::Package:
-                if (symbol.children.count() == 0)
+                if (symbol.children.count() == 0) {
                     continue;
+                }
                 icon = &m_icon_pkg;
                 break;
             case LSPSymbolKind::Class:
@@ -334,20 +346,23 @@ public:
             default:
                 // skip local variable
                 // property, field, etc unlikely in such case anyway
-                if (parent && parent->icon().cacheKey() == m_icon_function.cacheKey())
+                if (parent && parent->icon().cacheKey() == m_icon_function.cacheKey()) {
                     continue;
+                }
                 icon = &m_icon_var;
             }
 
             auto node = new QStandardItem();
             auto line = new QStandardItem();
-            if (parent && tree)
+            if (parent && tree) {
                 parent->appendRow({node, line});
-            else
+            } else {
                 model->appendRow({node, line});
+            }
 
-            if (!symbol.detail.isEmpty())
+            if (!symbol.detail.isEmpty()) {
                 details = true;
+            }
             auto detail = show_detail ? symbol.detail : QString();
             node->setText(symbol.name + detail);
             node->setIcon(*icon);
@@ -366,8 +381,9 @@ public:
 
     void onDocumentSymbolsOrProblem(const QList<LSPSymbolInformation> &outline, const QString &problem = QString(), bool cache = false)
     {
-        if (!m_symbols)
+        if (!m_symbols) {
             return;
+        }
 
         // construct new model for data
         auto newModel = std::make_shared<QStandardItemModel>();

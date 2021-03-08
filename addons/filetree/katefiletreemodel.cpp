@@ -8,6 +8,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QIcon>
 #include <QList>
 #include <QMimeData>
@@ -369,6 +370,11 @@ KateFileTreeModel::KateFileTreeModel(QObject *p)
     m_listMode = false;
 
     initModel();
+
+    // ensure palette change updates the colors properly
+    connect(qGuiApp, &QGuiApplication::paletteChanged, this, [this]() {
+        updateBackgrounds(true);
+    });
 }
 
 KateFileTreeModel::~KateFileTreeModel()
@@ -460,10 +466,12 @@ void KateFileTreeModel::connectDocument(const KTextEditor::Document *doc)
     connect(doc, &KTextEditor::Document::documentNameChanged, this, &KateFileTreeModel::documentNameChanged);
     connect(doc, &KTextEditor::Document::documentUrlChanged, this, &KateFileTreeModel::documentNameChanged);
     connect(doc, &KTextEditor::Document::modifiedChanged, this, &KateFileTreeModel::documentModifiedChanged);
+    // clang-format off
     connect(doc,
-            SIGNAL(modifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
+            SIGNAL(modifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
             this,
-            SLOT(documentModifiedOnDisc(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+            SLOT(documentModifiedOnDisc(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+    // clang-format on
 }
 
 QModelIndex KateFileTreeModel::docIndex(const KTextEditor::Document *doc) const
@@ -749,7 +757,7 @@ void KateFileTreeModel::documentModifiedChanged(KTextEditor::Document *doc)
     setupIcon(item);
 
     const QModelIndex idx = createIndex(item->row(), 0, item);
-    emit dataChanged(idx, idx);
+    Q_EMIT dataChanged(idx, idx);
 }
 
 void KateFileTreeModel::documentModifiedOnDisc(KTextEditor::Document *doc, bool modified, KTextEditor::ModificationInterface::ModifiedOnDiskReason reason)
@@ -781,7 +789,7 @@ void KateFileTreeModel::documentModifiedOnDisc(KTextEditor::Document *doc, bool 
     setupIcon(item);
 
     const QModelIndex idx = createIndex(item->row(), 0, item);
-    emit dataChanged(idx, idx);
+    Q_EMIT dataChanged(idx, idx);
 }
 
 void KateFileTreeModel::documentActivated(const KTextEditor::Document *doc)
@@ -815,26 +823,6 @@ void KateFileTreeModel::documentEdited(const KTextEditor::Document *doc)
     }
 
     updateBackgrounds();
-}
-
-void KateFileTreeModel::slotAboutToDeleteDocuments(const QList<KTextEditor::Document *> &docs)
-{
-    for (const KTextEditor::Document *doc : docs) {
-        disconnect(doc, &KTextEditor::Document::documentNameChanged, this, &KateFileTreeModel::documentNameChanged);
-        disconnect(doc, &KTextEditor::Document::documentUrlChanged, this, &KateFileTreeModel::documentNameChanged);
-        disconnect(doc, &KTextEditor::Document::modifiedChanged, this, &KateFileTreeModel::documentModifiedChanged);
-        disconnect(doc,
-                   SIGNAL(modifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
-                   this,
-                   SLOT(documentModifiedOnDisc(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
-    }
-}
-
-void KateFileTreeModel::slotDocumentsDeleted(const QList<KTextEditor::Document *> &docs)
-{
-    for (const KTextEditor::Document *doc : docs) {
-        connectDocument(doc);
-    }
 }
 
 class EditViewCount
@@ -883,7 +871,9 @@ void KateFileTreeModel::updateBackgrounds(bool force)
 
             const int n = qMax(v + e, 1);
 
-            shade.setRgb(((shade.red() * v) + (eshade.red() * e)) / n, ((shade.green() * v) + (eshade.green() * e)) / n, ((shade.blue() * v) + (eshade.blue() * e)) / n);
+            shade.setRgb(((shade.red() * v) + (eshade.red() * e)) / n,
+                         ((shade.green() * v) + (eshade.green() * e)) / n,
+                         ((shade.blue() * v) + (eshade.blue() * e)) / n);
         }
 
         // blend in the shade color; latest is most colored.
@@ -935,6 +925,16 @@ void KateFileTreeModel::handleEmptyParents(ProxyItemDir *item)
 
 void KateFileTreeModel::documentClosed(KTextEditor::Document *doc)
 {
+    disconnect(doc, &KTextEditor::Document::documentNameChanged, this, &KateFileTreeModel::documentNameChanged);
+    disconnect(doc, &KTextEditor::Document::documentUrlChanged, this, &KateFileTreeModel::documentNameChanged);
+    disconnect(doc, &KTextEditor::Document::modifiedChanged, this, &KateFileTreeModel::documentModifiedChanged);
+    // clang-format off
+    disconnect(doc,
+                SIGNAL(modifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
+                this,
+                SLOT(documentModifiedOnDisc(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+    // clang-format on
+
     if (!m_docmap.contains(doc)) {
         return;
     }
@@ -1000,7 +1000,7 @@ void KateFileTreeModel::documentNameChanged(KTextEditor::Document *doc)
     }
 
     handleNameChange(item);
-    emit triggerViewChangeAfterNameChange(); // FIXME: heh, non-standard signal?
+    Q_EMIT triggerViewChangeAfterNameChange(); // FIXME: heh, non-standard signal?
 }
 
 ProxyItemDir *KateFileTreeModel::findRootNode(const QString &name, const int r) const
@@ -1246,7 +1246,7 @@ void KateFileTreeModel::handleNameChange(ProxyItem *item)
     if (m_listMode) {
         const QModelIndex idx = createIndex(item->row(), 0, item);
         setupIcon(item);
-        emit dataChanged(idx, idx);
+        Q_EMIT dataChanged(idx, idx);
         return;
     }
 

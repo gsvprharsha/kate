@@ -11,8 +11,8 @@
 #include <QHeaderView>
 
 GotoSymbolTreeView::GotoSymbolTreeView(KTextEditor::MainWindow *mainWindow, QWidget *parent)
-    : QTreeView(parent),
-      m_mainWindow(mainWindow)
+    : QTreeView(parent)
+    , m_mainWindow(mainWindow)
 {
     setSelectionBehavior(QAbstractItemView::SelectRows);
     setSelectionMode(QAbstractItemView::SingleSelection);
@@ -30,8 +30,9 @@ int GotoSymbolTreeView::sizeHintWidth() const
 
 void GotoSymbolTreeView::currentChanged(const QModelIndex &current, const QModelIndex &previous)
 {
-    if (globalMode)
+    if (globalMode) {
         return QTreeView::currentChanged(current, previous);
+    }
 
     int line = current.data(Qt::UserRole).toInt();
     KTextEditor::Cursor c(--line, 0);

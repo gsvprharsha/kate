@@ -85,14 +85,16 @@ KTextEditor::Document *KateDocManager::createDoc(const KateDocumentInfo &docInfo
 
     // connect internal signals...
     connect(doc, &KTextEditor::Document::modifiedChanged, this, &KateDocManager::slotModChanged1);
+    // clang-format off
     connect(doc,
-            SIGNAL(modifiedOnDisk(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
+            SIGNAL(modifiedOnDisk(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)),
             this,
-            SLOT(slotModifiedOnDisc(KTextEditor::Document *, bool, KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+            SLOT(slotModifiedOnDisc(KTextEditor::Document*,bool,KTextEditor::ModificationInterface::ModifiedOnDiskReason)));
+    // clang-format on
 
     // we have a new document, show it the world
-    emit documentCreated(doc);
-    emit documentCreatedViewManager(doc);
+    Q_EMIT documentCreated(doc);
+    Q_EMIT documentCreatedViewManager(doc);
 
     // return our new document
     return doc;
@@ -131,15 +133,9 @@ KTextEditor::Document *KateDocManager::findDocument(const QUrl &url) const
 QList<KTextEditor::Document *> KateDocManager::openUrls(const QList<QUrl> &urls, const QString &encoding, bool isTempFile, const KateDocumentInfo &docInfo)
 {
     QList<KTextEditor::Document *> docs;
-
-    emit aboutToCreateDocuments();
-
     for (const QUrl &url : urls) {
         docs << openUrl(url, encoding, isTempFile, docInfo);
     }
-
-    emit documentsCreated(docs);
-
     return docs;
 }
 
@@ -206,7 +202,7 @@ bool KateDocManager::closeDocuments(const QList<KTextEditor::Document *> &docume
 
     saveMetaInfos(documents);
 
-    emit aboutToDeleteDocuments(documents);
+    Q_EMIT aboutToDeleteDocuments(documents);
 
     int last = 0;
     bool success = true;
@@ -218,32 +214,34 @@ bool KateDocManager::closeDocuments(const QList<KTextEditor::Document *> &docume
 
         if (closeUrl && m_tempFiles.contains(doc)) {
             QFileInfo fi(m_tempFiles[doc].first.toLocalFile());
-            if (fi.lastModified() <= m_tempFiles[doc].second ||
-                KMessageBox::questionYesNo(KateApp::self()->activeKateMainWindow(),
-                                           i18n("The supposedly temporary file %1 has been modified. "
-                                                "Do you want to delete it anyway?",
-                                                m_tempFiles[doc].first.url(QUrl::PreferLocalFile)),
-                                           i18n("Delete File?")) == KMessageBox::Yes) {
+            if (fi.lastModified() <= m_tempFiles[doc].second
+                || KMessageBox::questionYesNo(KateApp::self()->activeKateMainWindow(),
+                                              i18n("The supposedly temporary file %1 has been modified. "
+                                                   "Do you want to delete it anyway?",
+                                                   m_tempFiles[doc].first.url(QUrl::PreferLocalFile)),
+                                              i18n("Delete File?"))
+                    == KMessageBox::Yes) {
                 KIO::del(m_tempFiles[doc].first, KIO::HideProgressInfo);
                 qCDebug(LOG_KATE) << "Deleted temporary file " << m_tempFiles[doc].first;
                 m_tempFiles.remove(doc);
             } else {
                 m_tempFiles.remove(doc);
-                qCDebug(LOG_KATE) << "The supposedly temporary file " << m_tempFiles[doc].first.url() << " have been modified since loaded, and has not been deleted.";
+                qCDebug(LOG_KATE) << "The supposedly temporary file " << m_tempFiles[doc].first.url()
+                                  << " have been modified since loaded, and has not been deleted.";
             }
         }
 
         KateApp::self()->emitDocumentClosed(QString::number(reinterpret_cast<qptrdiff>(doc)));
 
         // document will be deleted, soon
-        emit documentWillBeDeleted(doc);
+        Q_EMIT documentWillBeDeleted(doc);
 
         // really delete the document and its infos
         delete m_docInfos.take(doc);
         delete m_docList.takeAt(m_docList.indexOf(doc));
 
         // document is gone, emit our signals
-        emit documentDeleted(doc);
+        Q_EMIT documentDeleted(doc);
 
         last++;
     }
@@ -256,7 +254,7 @@ bool KateDocManager::closeDocuments(const QList<KTextEditor::Document *> &docume
         createDoc();
     }
 
-    emit documentsDeleted(documents.mid(last));
+    Q_EMIT documentsDeleted(documents.mid(last));
 
     return success;
 }
@@ -367,10 +365,11 @@ bool KateDocManager::queryCloseDocuments(KateMainWindow *w)
 
 void KateDocManager::saveAll()
 {
-    for (KTextEditor::Document *doc : qAsConst(m_docList))
+    for (KTextEditor::Document *doc : qAsConst(m_docList)) {
         if (doc->isModified()) {
             doc->documentSave();
         }
+    }
 }
 
 void KateDocManager::saveSelected(const QList<KTextEditor::Document *> &docList)
@@ -417,8 +416,10 @@ void KateDocManager::saveDocumentList(KConfig *config)
 
     int i = 0;
     for (KTextEditor::Document *doc : qAsConst(m_docList)) {
-        KConfigGroup cg(config, QStringLiteral("Document %1").arg(i));
+        const QString entryName = QStringLiteral("Document %1").arg(i);
+        KConfigGroup cg(config, entryName);
         doc->writeSessionConfig(cg);
+
         i++;
     }
 }
@@ -453,6 +454,8 @@ void KateDocManager::restoreDocumentList(KConfig *config)
         connect(doc, &KParts::ReadOnlyPart::canceled, this, &KateDocManager::documentOpened);
 
         doc->readSessionConfig(cg);
+
+        KateApp::self()->stashManager()->popDocument(doc, cg);
 
         progress.setValue(i);
     }
@@ -560,7 +563,9 @@ void KateDocManager::slotModChanged(KTextEditor::Document *doc)
 
 void KateDocManager::slotModChanged1(KTextEditor::Document *doc)
 {
-    QMetaObject::invokeMethod(KateApp::self()->activeKateMainWindow(), "queueModifiedOnDisc", Qt::QueuedConnection, Q_ARG(KTextEditor::Document *, doc));
+    // clang-format off
+    QMetaObject::invokeMethod(KateApp::self()->activeKateMainWindow(), "queueModifiedOnDisc", Qt::QueuedConnection, Q_ARG(KTextEditor::Document*,doc));
+    // clang-format on
 }
 
 void KateDocManager::documentOpened()

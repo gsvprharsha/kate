@@ -220,7 +220,6 @@ void SnippetRepository::save()
     QString outname = dir.absoluteFilePath(fi.fileName());
 
     if (m_file != outname) {
-        QFileInfo fiout(outname);
         // there could be cases that new new name clashes with a global file, but I guess it is not that often.
         int i = 0;
         while (QFile::exists(outname)) {
@@ -228,7 +227,8 @@ void SnippetRepository::save()
             outname = dir.absoluteFilePath(QString::number(i) + fi.fileName());
         }
         KMessageBox::information(QApplication::activeWindow(),
-                                 i18n("You have edited a snippet repository file not located in your personal directory; as such, a copy of the original file has been created within your personal data directory."));
+                                 i18n("You have edited a snippet repository file not located in your personal directory; as such, a copy of the original file "
+                                      "has been created within your personal data directory."));
     }
 
     QFile outfile(outname);
@@ -279,7 +279,9 @@ void SnippetRepository::slotParseFile()
     f.close();
 
     if (!success) {
-        KMessageBox::error(QApplication::activeWindow(), i18n("<qt>The error <b>%4</b><br /> has been detected in the file %1 at %2/%3</qt>", m_file, line, col, i18nc("QXml", errorMsg.toUtf8().data())));
+        KMessageBox::error(
+            QApplication::activeWindow(),
+            i18n("<qt>The error <b>%4</b><br /> has been detected in the file %1 at %2/%3</qt>", m_file, line, col, i18nc("QXml", errorMsg.toUtf8().data())));
         return;
     }
 

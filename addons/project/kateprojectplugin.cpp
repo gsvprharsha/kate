@@ -12,13 +12,12 @@
 
 #include <ktexteditor/application.h>
 #include <ktexteditor/editor.h>
-#include <ktexteditor_version.h> // delete, when we depend on KF 5.63
 
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KSharedConfig>
-#include <ThreadWeaver/Queue>
 
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QTime>
 
@@ -49,16 +48,9 @@ const QStringList DefaultConfig = QStringList() << GitConfig << SubversionConfig
 KateProjectPlugin::KateProjectPlugin(QObject *parent, const QList<QVariant> &)
     : KTextEditor::Plugin(parent)
     , m_completion(this)
-    , m_autoGit(true)
-    , m_autoSubversion(true)
-    , m_autoMercurial(true)
-    , m_indexEnabled(false)
-    , m_multiProjectCompletion(false)
-    , m_multiProjectGoto(false)
-    , m_weaver(new ThreadWeaver::Queue(this))
 {
     qRegisterMetaType<KateProjectSharedQStandardItem>("KateProjectSharedQStandardItem");
-    qRegisterMetaType<KateProjectSharedQMapStringItem>("KateProjectSharedQMapStringItem");
+    qRegisterMetaType<KateProjectSharedQHashStringItem>("KateProjectSharedQHashStringItem");
     qRegisterMetaType<KateProjectSharedProjectIndex>("KateProjectSharedProjectIndex");
 
     connect(KTextEditor::Editor::instance()->application(), &KTextEditor::Application::documentCreated, this, &KateProjectPlugin::slotDocumentCreated);
@@ -66,6 +58,16 @@ KateProjectPlugin::KateProjectPlugin(QObject *parent, const QList<QVariant> &)
 
     // read configuration prior to cwd project setup below
     readConfig();
+    QStringList args = qApp->arguments();
+    bool projectSpecified = false;
+    args.removeFirst(); // The first argument is the executable name
+    for (const QString &arg : qAsConst(args)) {
+        QFileInfo info(arg);
+        if (info.isDir()) {
+            projectForDir(info.absoluteFilePath());
+            projectSpecified = true;
+        }
+    }
 
 #ifdef HAVE_CTERMID
     /**
@@ -77,7 +79,9 @@ KateProjectPlugin::KateProjectPlugin(QObject *parent, const QList<QVariant> &)
     int fd = ::open(tty, O_RDONLY);
 
     if (fd >= 0) {
-        projectForDir(QDir::current());
+        if (!projectSpecified) {
+            projectForDir(QDir::current());
+        }
         ::close(fd);
     }
 #endif
@@ -98,9 +102,6 @@ KateProjectPlugin::~KateProjectPlugin()
         delete project;
     }
     m_projects.clear();
-
-    m_weaver->shutDown();
-    delete m_weaver;
 }
 
 QObject *KateProjectPlugin::createView(KTextEditor::MainWindow *mainWindow)
@@ -123,7 +124,7 @@ KTextEditor::ConfigPage *KateProjectPlugin::configPage(int number, QWidget *pare
 
 KateProject *KateProjectPlugin::createProjectForFileName(const QString &fileName)
 {
-    KateProject *project = new KateProject(m_weaver, this);
+    KateProject *project = new KateProject(m_threadPool, this);
     if (!project->loadFromFile(fileName)) {
         delete project;
         return nullptr;
@@ -131,7 +132,7 @@ KateProject *KateProjectPlugin::createProjectForFileName(const QString &fileName
 
     m_projects.append(project);
     m_fileWatcher.addPath(QFileInfo(fileName).canonicalPath());
-    emit projectCreated(project);
+    Q_EMIT projectCreated(project);
     return project;
 }
 
@@ -282,12 +283,12 @@ KateProject *KateProjectPlugin::createProjectForRepository(const QString &type, 
     cnf[QStringLiteral("name")] = dir.dirName();
     cnf[QStringLiteral("files")] = (QVariantList() << files);
 
-    KateProject *project = new KateProject(m_weaver, this);
+    KateProject *project = new KateProject(m_threadPool, this);
     project->loadFromData(cnf, dir.canonicalPath());
 
     m_projects.append(project);
 
-    emit projectCreated(project);
+    Q_EMIT projectCreated(project);
     return project;
 }
 
@@ -341,6 +342,39 @@ bool KateProjectPlugin::multiProjectGoto() const
     return m_multiProjectGoto;
 }
 
+void KateProjectPlugin::setGitStatusShowNumStat(bool show)
+{
+    m_gitNumStat = show;
+    writeConfig();
+}
+
+bool KateProjectPlugin::showGitStatusWithNumStat()
+{
+    return m_gitNumStat;
+}
+
+void KateProjectPlugin::setSingleClickAction(ClickAction cb)
+{
+    m_singleClickAction = cb;
+    writeConfig();
+}
+
+ClickAction KateProjectPlugin::singleClickAcion()
+{
+    return m_singleClickAction;
+}
+
+void KateProjectPlugin::setDoubleClickAction(ClickAction cb)
+{
+    m_doubleClickAction = cb;
+    writeConfig();
+}
+
+ClickAction KateProjectPlugin::doubleClickAcion()
+{
+    return m_doubleClickAction;
+}
+
 void KateProjectPlugin::setMultiProject(bool completion, bool gotoSymbol)
 {
     m_multiProjectCompletion = completion;
@@ -351,21 +385,11 @@ void KateProjectPlugin::setMultiProject(bool completion, bool gotoSymbol)
 void KateProjectPlugin::readConfig()
 {
     KConfigGroup config(KSharedConfig::openConfig(), "project");
-    QStringList autorepository = config.readEntry("autorepository", DefaultConfig);
 
-    m_autoGit = m_autoSubversion = m_autoMercurial = false;
-
-    if (autorepository.contains(GitConfig)) {
-        m_autoGit = true;
-    }
-
-    if (autorepository.contains(SubversionConfig)) {
-        m_autoSubversion = true;
-    }
-
-    if (autorepository.contains(MercurialConfig)) {
-        m_autoMercurial = true;
-    }
+    const QStringList autorepository = config.readEntry("autorepository", DefaultConfig);
+    m_autoGit = autorepository.contains(GitConfig);
+    m_autoSubversion = autorepository.contains(SubversionConfig);
+    m_autoMercurial = autorepository.contains(MercurialConfig);
 
     m_indexEnabled = config.readEntry("index", false);
     m_indexDirectory = config.readEntry("indexDirectory", QUrl());
@@ -373,7 +397,11 @@ void KateProjectPlugin::readConfig()
     m_multiProjectCompletion = config.readEntry("multiProjectCompletion", false);
     m_multiProjectGoto = config.readEntry("multiProjectCompletion", false);
 
-    emit configUpdated();
+    m_gitNumStat = config.readEntry("gitStatusNumStat", true);
+    m_singleClickAction = (ClickAction)config.readEntry("gitStatusSingleClick", (int)ClickAction::ShowDiff);
+    m_doubleClickAction = (ClickAction)config.readEntry("gitStatusDoubleClick", (int)ClickAction::StageUnstage);
+
+    Q_EMIT configUpdated();
 }
 
 void KateProjectPlugin::writeConfig()
@@ -401,58 +429,60 @@ void KateProjectPlugin::writeConfig()
     config.writeEntry("multiProjectCompletion", m_multiProjectCompletion);
     config.writeEntry("multiProjectGoto", m_multiProjectGoto);
 
-    emit configUpdated();
+    config.writeEntry("gitStatusNumStat", m_gitNumStat);
+    config.writeEntry("gitStatusSingleClick", (int)m_singleClickAction);
+    config.writeEntry("gitStatusDoubleClick", (int)m_doubleClickAction);
+
+    Q_EMIT configUpdated();
 }
 
-#if KTEXTEDITOR_VERSION >= QT_VERSION_CHECK(5, 63, 0)
 static KateProjectPlugin *findProjectPlugin()
 {
     auto plugin = KTextEditor::Editor::instance()->application()->plugin(QStringLiteral("kateprojectplugin"));
     return qobject_cast<KateProjectPlugin *>(plugin);
 }
-#endif
 
 void KateProjectPlugin::registerVariables()
 {
-#if KTEXTEDITOR_VERSION >= QT_VERSION_CHECK(5, 63, 0)
     auto editor = KTextEditor::Editor::instance();
-    editor->registerVariableMatch(QStringLiteral("Project:Path"), i18n("Full path to current project excluding the file name."), [](const QStringView &, KTextEditor::View *view) {
-        if (!view) {
-            return QString();
-        }
-        auto projectPlugin = findProjectPlugin();
-        if (!projectPlugin) {
-            return QString();
-        }
-        auto kateProject = findProjectPlugin()->projectForUrl(view->document()->url());
-        if (!kateProject) {
-            return QString();
-        }
-        return QDir(kateProject->baseDir()).absolutePath();
-    });
+    editor->registerVariableMatch(QStringLiteral("Project:Path"),
+                                  i18n("Full path to current project excluding the file name."),
+                                  [](const QStringView &, KTextEditor::View *view) {
+                                      if (!view) {
+                                          return QString();
+                                      }
+                                      auto projectPlugin = findProjectPlugin();
+                                      if (!projectPlugin) {
+                                          return QString();
+                                      }
+                                      auto kateProject = findProjectPlugin()->projectForUrl(view->document()->url());
+                                      if (!kateProject) {
+                                          return QString();
+                                      }
+                                      return QDir(kateProject->baseDir()).absolutePath();
+                                  });
 
-    editor->registerVariableMatch(QStringLiteral("Project:NativePath"), i18n("Full path to current project excluding the file name, with native path separator (backslash on Windows)."), [](const QStringView &, KTextEditor::View *view) {
-        if (!view) {
-            return QString();
-        }
-        auto projectPlugin = findProjectPlugin();
-        if (!projectPlugin) {
-            return QString();
-        }
-        auto kateProject = findProjectPlugin()->projectForUrl(view->document()->url());
-        if (!kateProject) {
-            return QString();
-        }
-        return QDir::toNativeSeparators(QDir(kateProject->baseDir()).absolutePath());
-    });
-#endif
+    editor->registerVariableMatch(QStringLiteral("Project:NativePath"),
+                                  i18n("Full path to current project excluding the file name, with native path separator (backslash on Windows)."),
+                                  [](const QStringView &, KTextEditor::View *view) {
+                                      if (!view) {
+                                          return QString();
+                                      }
+                                      auto projectPlugin = findProjectPlugin();
+                                      if (!projectPlugin) {
+                                          return QString();
+                                      }
+                                      auto kateProject = findProjectPlugin()->projectForUrl(view->document()->url());
+                                      if (!kateProject) {
+                                          return QString();
+                                      }
+                                      return QDir::toNativeSeparators(QDir(kateProject->baseDir()).absolutePath());
+                                  });
 }
 
 void KateProjectPlugin::unregisterVariables()
 {
-#if KTEXTEDITOR_VERSION >= QT_VERSION_CHECK(5, 63, 0)
     auto editor = KTextEditor::Editor::instance();
     editor->unregisterVariableMatch(QStringLiteral("Project:Path"));
     editor->unregisterVariableMatch(QStringLiteral("Project:NativePath"));
-#endif
 }

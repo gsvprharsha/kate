@@ -93,6 +93,9 @@ target_sources(
 
     katecommandbar.cpp
     commandmodel.cpp
+
+    kateoutputview.cpp
+    katestashmanager.cpp
 )
 
 # Executable only adds the main definition.
@@ -118,20 +121,26 @@ if(APPLE OR WIN32)
   endif()
 endif()
 
+# we have different windows icons, less margins
+set(ICONS_FOLDER ${CMAKE_CURRENT_SOURCE_DIR}/icons/unix)
+if(WIN32)
+    set(ICONS_FOLDER ${CMAKE_CURRENT_SOURCE_DIR}/icons/windows)
+endif()
+
 # application icon, in all sizes needed to have e.g. nice Windows icons, too
 set(ICON_FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/sc-apps-kate.svg
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/16-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/22-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/32-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/44-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/48-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/64-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/128-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/150-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/256-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/310-apps-kate.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/icons/512-apps-kate.png
+  ${ICONS_FOLDER}/sc-apps-kate.svg
+  ${ICONS_FOLDER}/16-apps-kate.png
+  ${ICONS_FOLDER}/22-apps-kate.png
+  ${ICONS_FOLDER}/32-apps-kate.png
+  ${ICONS_FOLDER}/44-apps-kate.png
+  ${ICONS_FOLDER}/48-apps-kate.png
+  ${ICONS_FOLDER}/64-apps-kate.png
+  ${ICONS_FOLDER}/128-apps-kate.png
+  ${ICONS_FOLDER}/150-apps-kate.png
+  ${ICONS_FOLDER}/256-apps-kate.png
+  ${ICONS_FOLDER}/310-apps-kate.png
+  ${ICONS_FOLDER}/512-apps-kate.png
 )
 
 # Add icon files to the application's source files to have CMake bundle them in the executable.
@@ -166,7 +175,7 @@ install(TARGETS kate-bin ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 
 ecm_install_icons(
   ICONS ${ICON_FILES}
-  DESTINATION ${ICON_INSTALL_DIR}
+  DESTINATION ${KDE_INSTALL_ICONDIR}
   THEME hicolor
 )
 
@@ -177,7 +186,7 @@ install(
 
 install(
   FILES ${CMAKE_CURRENT_SOURCE_DIR}/data/org.kde.kate.appdata.xml
-  DESTINATION ${CMAKE_INSTALL_METAINFODIR}
+  DESTINATION ${KDE_INSTALL_METAINFODIR}
 )
 
 if(BUILD_TESTING)

@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
 
     SPDX-License-Identifier: MIT
@@ -30,6 +29,8 @@
 #include <QThread>
 #include <QTime>
 #include <QTimer>
+
+#include <json_utils.h>
 
 // helper to find a proper root dir for the given document & file name that indicate the root dir
 static QString rootForDocumentAndRootIndicationFileName(KTextEditor::Document *document, const QString &rootIndicationFileName)
@@ -63,27 +64,6 @@ static QString rootForDocumentAndRootIndicationFileName(KTextEditor::Document *d
 
 #include <memory>
 
-// local helper;
-// recursively merge top json top onto bottom json
-static QJsonObject merge(const QJsonObject &bottom, const QJsonObject &top)
-{
-    QJsonObject result;
-    for (auto item = top.begin(); item != top.end(); item++) {
-        const auto &key = item.key();
-        if (item.value().isObject()) {
-            result.insert(key, merge(bottom.value(key).toObject(), item.value().toObject()));
-        } else {
-            result.insert(key, item.value());
-        }
-    }
-    // parts only in bottom
-    for (auto item = bottom.begin(); item != bottom.end(); item++) {
-        if (!result.contains(item.key())) {
-            result.insert(item.key(), item.value());
-        }
-    }
-    return result;
-}
 
 // helper guard to handle revision (un)lock
 struct RevisionGuard {
@@ -150,10 +130,12 @@ public:
 
         // make sure revision is cleared when needed and no longer used (to unlock or otherwise)
         // see e.g. implementation in katetexthistory.cpp and assert's in place there
-        auto conn = connect(doc, SIGNAL(aboutToInvalidateMovingInterfaceContent(KTextEditor::Document *)), this, SLOT(clearRevisions(KTextEditor::Document *)));
+        // clang-format off
+        auto conn = connect(doc, SIGNAL(aboutToInvalidateMovingInterfaceContent(KTextEditor::Document*)), this, SLOT(clearRevisions(KTextEditor::Document*)));
         Q_ASSERT(conn);
-        conn = connect(doc, SIGNAL(aboutToDeleteMovingInterfaceContent(KTextEditor::Document *)), this, SLOT(clearRevisions(KTextEditor::Document *)));
+        conn = connect(doc, SIGNAL(aboutToDeleteMovingInterfaceContent(KTextEditor::Document*)), this, SLOT(clearRevisions(KTextEditor::Document*)));
         Q_ASSERT(conn);
+        // clang-format on
         m_guards.emplace(doc->url(), doc);
     }
 
@@ -258,8 +240,9 @@ public:
         for (const auto &el : m_servers) {
             for (const auto &si : el) {
                 auto &s = si.server;
-                if (!s)
+                if (!s) {
                     continue;
+                }
                 disconnect(s.data(), nullptr, this, nullptr);
                 if (s->state() != LSPClientServer::State::None) {
                     auto handler = [&q, &count, s]() {
@@ -283,8 +266,9 @@ public:
             for (const auto &el : m_servers) {
                 for (const auto &si : el) {
                     auto &s = si.server;
-                    if (!s)
+                    if (!s) {
                         continue;
+                    }
                     s->stop(count == 0 ? 1 : -1, count == 0 ? -1 : 1);
                 }
             }
@@ -297,8 +281,9 @@ public:
     {
         // query cache first
         const auto cacheIt = m_highlightingModeToLanguageIdCache.find(mode);
-        if (cacheIt != m_highlightingModeToLanguageIdCache.end())
+        if (cacheIt != m_highlightingModeToLanguageIdCache.end()) {
             return cacheIt.value();
+        }
 
         // match via regexes + cache result
         for (auto it : m_highlightingModeRegexToLanguageId) {
@@ -321,8 +306,9 @@ public:
         // most servers can find out much better on their own
         // (though it would actually have to be confirmed as such)
         bool useId = true;
-        if (it != m_documentLanguageId.end())
+        if (it != m_documentLanguageId.end()) {
             useId = it.value();
+        }
 
         return useId ? langId : QString();
     }
@@ -334,18 +320,21 @@ public:
 
     QSharedPointer<LSPClientServer> findServer(KTextEditor::Document *document, bool updatedoc = true) override
     {
-        if (!document || document->url().isEmpty())
+        if (!document || document->url().isEmpty()) {
             return nullptr;
+        }
 
         auto it = m_docs.find(document);
         auto server = it != m_docs.end() ? it->server : nullptr;
         if (!server) {
-            if ((server = _findServer(document)))
+            if ((server = _findServer(document))) {
                 trackDocument(document, server);
+            }
         }
 
-        if (server && updatedoc)
+        if (server && updatedoc) {
             update(server.data(), false);
+        }
         return server;
     }
 
@@ -395,7 +384,7 @@ private:
     void showMessage(const QString &msg, KTextEditor::Message::MessageType level)
     {
         // inform interested view(er) which will decide how/where to show
-        emit LSPClientServerManager::showMessage(level, msg);
+        Q_EMIT LSPClientServerManager::showMessage(level, msg);
     }
 
     // caller ensures that servers are no longer present in m_servers
@@ -431,13 +420,19 @@ private:
 
         // initiate delayed stages (TERM and KILL)
         // async, so give a bit more time
-        QTimer::singleShot(2 * TIMEOUT_SHUTDOWN, this, [stopservers]() { stopservers(1, -1); });
-        QTimer::singleShot(4 * TIMEOUT_SHUTDOWN, this, [stopservers]() { stopservers(-1, 1); });
+        QTimer::singleShot(2 * TIMEOUT_SHUTDOWN, this, [stopservers]() {
+            stopservers(1, -1);
+        });
+        QTimer::singleShot(4 * TIMEOUT_SHUTDOWN, this, [stopservers]() {
+            stopservers(-1, 1);
+        });
 
         // as for the start part
         // trigger interested parties, which will again request a server as needed
         // let's delay this; less chance for server instances to trip over each other
-        QTimer::singleShot(6 * TIMEOUT_SHUTDOWN, this, [this]() { emit serverChanged(); });
+        QTimer::singleShot(6 * TIMEOUT_SHUTDOWN, this, [this]() {
+            Q_EMIT serverChanged();
+        });
     }
 
     void onStateChanged(LSPClientServer *server)
@@ -452,7 +447,7 @@ private:
                 }
             }
             // clear for normal operation
-            emit serverChanged();
+            Q_EMIT serverChanged();
         } else if (server->state() == LSPClientServer::State::None) {
             // went down
             // find server info to see how bad this is
@@ -480,7 +475,8 @@ private:
                 }
             }
             auto action = retry ? i18n("Restarting") : i18n("NOT Restarting");
-            showMessage(i18n("Server terminated unexpectedly ... %1 [%2] [homepage: %3] ", action, server->cmdline().join(QLatin1Char(' ')), url), KTextEditor::Message::Warning);
+            showMessage(i18n("Server terminated unexpectedly ... %1 [%2] [homepage: %3] ", action, server->cmdline().join(QLatin1Char(' ')), url),
+                        KTextEditor::Message::Warning);
             if (sserver) {
                 // sserver might still be in m_servers
                 // but since it died already bringing it down will have no (ill) effect
@@ -493,8 +489,9 @@ private:
     {
         // compute the LSP standardized language id, none found => no change
         auto langId = languageId(document->highlightingMode());
-        if (langId.isEmpty())
+        if (langId.isEmpty()) {
             return nullptr;
+        }
 
         QObject *projectView = m_mainWindow->pluginView(QStringLiteral("kateprojectplugin"));
         const auto projectBase = QDir(projectView ? projectView->property("projectBaseDir").toString() : QString());
@@ -502,7 +499,7 @@ private:
 
         // merge with project specific
         auto projectConfig = QJsonDocument::fromVariant(projectMap).object().value(QStringLiteral("lspclient")).toObject();
-        auto serverConfig = merge(m_serverConfig, projectConfig);
+        auto serverConfig = json::merge(m_serverConfig, projectConfig);
 
         // locate server config
         QJsonValue config;
@@ -524,11 +521,12 @@ private:
             break;
         }
 
-        if (!config.isObject())
+        if (!config.isObject()) {
             return nullptr;
+        }
 
         // merge global settings
-        serverConfig = merge(serverConfig.value(QStringLiteral("global")).toObject(), config.toObject());
+        serverConfig = json::merge(serverConfig.value(QStringLiteral("global")).toObject(), config.toObject());
 
         QString rootpath;
         auto rootv = serverConfig.value(QStringLiteral("root"));
@@ -593,7 +591,8 @@ private:
                 if (!server->start(m_plugin)) {
                     showMessage(i18n("Failed to start server: %1", cmdline.join(QLatin1Char(' '))), KTextEditor::Message::Error);
                 } else {
-                    showMessage(i18n("Started server %2: %1", cmdline.join(QLatin1Char(' ')), serverDescription(server.data())), KTextEditor::Message::Positive);
+                    showMessage(i18n("Started server %2: %1", cmdline.join(QLatin1Char(' ')), serverDescription(server.data())),
+                                KTextEditor::Message::Positive);
                 }
                 serverinfo.settings = serverConfig.value(QStringLiteral("settings"));
                 serverinfo.started = QTime::currentTime();
@@ -619,11 +618,11 @@ private:
             if (f.open(QIODevice::ReadOnly)) {
                 const auto data = f.readAll();
                 if (!data.isEmpty()) {
-                    QJsonParseError error {};
+                    QJsonParseError error{};
                     auto json = QJsonDocument::fromJson(data, &error);
                     if (error.error == QJsonParseError::NoError) {
                         if (json.isObject()) {
-                            m_serverConfig = merge(m_serverConfig, json.object());
+                            m_serverConfig = json::merge(m_serverConfig, json.object());
                         } else {
                             showMessage(i18n("Failed to parse server configuration '%1': no JSON object", configPath), KTextEditor::Message::Error);
                         }
@@ -658,7 +657,7 @@ private:
         // we could (but do not) perform restartAll here;
         // for now let's leave that up to user
         // but maybe we do have a server now where not before, so let's signal
-        emit serverChanged();
+        Q_EMIT serverChanged();
     }
 
     void trackDocument(KTextEditor::Document *doc, const QSharedPointer<LSPClientServer> &server)
@@ -710,7 +709,7 @@ private:
     void untrack(QObject *doc)
     {
         _close(qobject_cast<KTextEditor::Document *>(doc), true);
-        emit serverChanged();
+        Q_EMIT serverChanged();
     }
 
     void close(KTextEditor::Document *doc)
@@ -764,8 +763,9 @@ private:
 
     DocumentInfo *getDocumentInfo(KTextEditor::Document *doc)
     {
-        if (!m_incrementalSync)
+        if (!m_incrementalSync) {
             return nullptr;
+        }
 
         auto it = m_docs.find(doc);
         if (it != m_docs.end() && it->server) {
@@ -781,7 +781,7 @@ private:
     {
         auto info = getDocumentInfo(doc);
         if (info) {
-            info->changes.push_back({LSPRange {position, position}, text});
+            info->changes.push_back({LSPRange{position, position}, text});
         }
     }
 
@@ -808,8 +808,8 @@ private:
         Q_ASSERT(line > 0);
         auto info = getDocumentInfo(doc);
         if (info) {
-            LSPRange oldrange {{line - 1, 0}, {line + 1, 0}};
-            LSPRange newrange {{line - 1, 0}, {line, 0}};
+            LSPRange oldrange{{line - 1, 0}, {line + 1, 0}};
+            LSPRange newrange{{line - 1, 0}, {line, 0}};
             auto text = doc->text(newrange);
             info->changes.push_back({oldrange, text});
         }

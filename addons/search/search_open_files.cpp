@@ -1,29 +1,19 @@
-/*   Kate search plugin
- *
- * SPDX-FileCopyrightText: 2011-2021 Kåre Särs <kare.sars@iki.fi>
- *
- * SPDX-License-Identifier: LGPL-2.0-or-later
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program in a file called COPYING; if not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA 02110-1301, USA.
- */
+/*
+    SPDX-FileCopyrightText: 2011-21 Kåre Särs <kare.sars@iki.fi>
+
+    SPDX-License-Identifier: LGPL-2.0-or-later
+*/
 
 #include "search_open_files.h"
-
 
 SearchOpenFiles::SearchOpenFiles(QObject *parent)
     : QObject(parent)
 {
     m_nextRunTimer.setInterval(0);
     m_nextRunTimer.setSingleShot(true);
-    connect(&m_nextRunTimer, &QTimer::timeout, this, [this]() { doSearchNextFile(m_nextLine); });
+    connect(&m_nextRunTimer, &QTimer::timeout, this, [this]() {
+        doSearchNextFile(m_nextLine);
+    });
 }
 
 bool SearchOpenFiles::searching()
@@ -33,8 +23,9 @@ bool SearchOpenFiles::searching()
 
 void SearchOpenFiles::startSearch(const QList<KTextEditor::Document *> &list, const QRegularExpression &regexp)
 {
-    if (m_nextFileIndex != -1)
+    if (m_nextFileIndex != -1) {
         return;
+    }
 
     m_docList = list;
     m_nextFileIndex = 0;
@@ -78,7 +69,7 @@ void SearchOpenFiles::doSearchNextFile(int startLine)
         if (m_nextFileIndex == m_docList.size()) {
             m_nextFileIndex = -1;
             m_cancelSearch = true;
-            emit searchDone();
+            Q_EMIT searchDone();
         } else {
             m_nextLine = 0;
         }
@@ -92,7 +83,7 @@ int SearchOpenFiles::searchOpenFile(KTextEditor::Document *doc, const QRegularEx
 {
     if (m_statusTime.elapsed() > 100) {
         m_statusTime.restart();
-        emit searching(doc->url().toString());
+        Q_EMIT searching(doc->url().toString());
     }
 
     if (regExp.pattern().contains(QLatin1String("\\n"))) {
@@ -120,23 +111,26 @@ int SearchOpenFiles::searchSingleLineRegExp(KTextEditor::Document *doc, const QR
         match = regExp.match(doc->line(line));
         column = match.capturedStart();
 
-
         while (column != -1 && !match.captured().isEmpty()) {
             int endColumn = column + match.capturedLength();
-            int preContextStart = qMax(0, column-MatchModel::PreContextLen);
+            int preContextStart = qMax(0, column - MatchModel::PreContextLen);
             const QString &lineStr = doc->line(line);
-            QString preContext = lineStr.mid(preContextStart, column-preContextStart);
+            QString preContext = lineStr.mid(preContextStart, column - preContextStart);
             QString postContext = lineStr.mid(endColumn, MatchModel::PostContextLen);
 
-            matches.push_back(KateSearchMatch{preContext, match.captured(), postContext, QString(),
-                KTextEditor::Range{line, column, line, column + match.capturedLength()}, true});
+            matches.push_back(KateSearchMatch{preContext,
+                                              match.captured(),
+                                              postContext,
+                                              QString(),
+                                              KTextEditor::Range{line, column, line, column + match.capturedLength()},
+                                              true});
             match = regExp.match(doc->line(line), column + match.capturedLength());
             column = match.capturedStart();
         }
     }
 
-    // emit all matches batched
-    emit matchesFound(doc->url(), matches);
+    // Q_EMIT all matches batched
+    Q_EMIT matchesFound(doc->url(), matches);
 
     return resultLine;
 }
@@ -202,13 +196,12 @@ int SearchOpenFiles::searchMultiLineRegExp(KTextEditor::Document *doc, const QRe
         int lastNL = match.captured().lastIndexOf(QLatin1Char('\n'));
         int endColumn = lastNL == -1 ? startColumn + match.captured().length() : match.captured().length() - lastNL - 1;
 
-        int preContextStart = qMax(0, startColumn-MatchModel::PreContextLen);
-        QString preContext = doc->line(startLine).mid(preContextStart, startColumn-preContextStart);
+        int preContextStart = qMax(0, startColumn - MatchModel::PreContextLen);
+        QString preContext = doc->line(startLine).mid(preContextStart, startColumn - preContextStart);
         QString postContext = doc->line(endLine).mid(endColumn, MatchModel::PostContextLen);
 
         matches.push_back(
-            KateSearchMatch{preContext, match.captured(), postContext, QString(),
-                KTextEditor::Range{startLine, startColumn, endLine, endColumn}, true});
+            KateSearchMatch{preContext, match.captured(), postContext, QString(), KTextEditor::Range{startLine, startColumn, endLine, endColumn}, true});
         match = tmpRegExp.match(m_fullDoc, column + match.capturedLength());
         column = match.capturedStart();
 
@@ -219,8 +212,8 @@ int SearchOpenFiles::searchMultiLineRegExp(KTextEditor::Document *doc, const QRe
         }
     }
 
-    // emit all matches batched
-    emit matchesFound(doc->url(), matches);
+    // Q_EMIT all matches batched
+    Q_EMIT matchesFound(doc->url(), matches);
 
     return resultLine;
 }

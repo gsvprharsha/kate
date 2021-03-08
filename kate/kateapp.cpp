@@ -16,7 +16,6 @@
 #include <KSharedConfig>
 #include <KStartupInfo>
 #include <KWindowInfo>
-#include <kwindowsystem_version.h>
 
 #ifdef WITH_KUSERFEEDBACK
 #include <KUserFeedback/ApplicationVersionSource>
@@ -54,6 +53,7 @@ KateApp::KateApp(const QCommandLineParser &args)
     , m_adaptor(this)
     , m_pluginManager(this)
     , m_sessionManager(this)
+    , m_stashManager(this)
 {
     /**
      * re-route some signals to application wrapper
@@ -61,8 +61,6 @@ KateApp::KateApp(const QCommandLineParser &args)
     connect(&m_docManager, &KateDocManager::documentCreated, &m_wrapper, &KTextEditor::Application::documentCreated);
     connect(&m_docManager, &KateDocManager::documentWillBeDeleted, &m_wrapper, &KTextEditor::Application::documentWillBeDeleted);
     connect(&m_docManager, &KateDocManager::documentDeleted, &m_wrapper, &KTextEditor::Application::documentDeleted);
-    connect(&m_docManager, &KateDocManager::aboutToCreateDocuments, &m_wrapper, &KTextEditor::Application::aboutToCreateDocuments);
-    connect(&m_docManager, &KateDocManager::documentsCreated, &m_wrapper, &KTextEditor::Application::documentsCreated);
 
     /**
      * handle mac os x like file open request via event filter
@@ -191,12 +189,8 @@ bool KateApp::startupKate()
 
     // notify about start
     QWidget *win = activeKateMainWindow();
-#if KWINDOWSYSTEM_VERSION >= QT_VERSION_CHECK(5, 62, 0)
     win->setAttribute(Qt::WA_NativeWindow, true);
     KStartupInfo::setNewStartupId(win->windowHandle(), KStartupInfo::startupId());
-#else
-    KStartupInfo::setNewStartupId(win, KStartupInfo::startupId());
-#endif
 
     QTextCodec *codec = m_args.isSet(QStringLiteral("encoding")) ? QTextCodec::codecForName(m_args.value(QStringLiteral("encoding")).toUtf8()) : nullptr;
     bool tempfileSet = m_args.isSet(QStringLiteral("tempfile"));
@@ -223,17 +217,19 @@ bool KateApp::startupKate()
                 QString columnStr = q.queryItemValue(QStringLiteral("column"));
 
                 int line = lineStr.toInt();
-                if (line > 0)
+                if (line > 0) {
                     line--;
+                }
 
                 int column = columnStr.toInt();
-                if (column > 0)
+                if (column > 0) {
                     column--;
+                }
 
                 setCursor(line, column);
             }
-        } else {
-            KMessageBox::sorry(activeKateMainWindow(), i18n("The file '%1' could not be opened: it is not a normal file, it is a folder.", info.url.toString()));
+        } else if (!KateApp::self()->pluginManager()->plugin(QStringLiteral("kateprojectplugin"))) {
+            KMessageBox::sorry(activeKateMainWindow(), i18n("Folders can only be opened when the projects plugin is enabled"));
         }
     }
 
@@ -313,6 +309,11 @@ KateSessionManager *KateApp::sessionManager()
     return &m_sessionManager;
 }
 
+KateStashManager *KateApp::stashManager()
+{
+    return &m_stashManager;
+}
+
 bool KateApp::openUrl(const QUrl &url, const QString &encoding, bool isTempFile)
 {
     return openDocUrl(url, encoding, isTempFile);
@@ -324,8 +325,9 @@ bool KateApp::isOnActivity(const QString &activity)
         const KWindowInfo info(window->winId(), {}, NET::WM2Activities);
         const auto activities = info.activities();
         // handle special case of "on all activities"
-        if (activities.isEmpty() || activities.contains(activity))
+        if (activities.isEmpty() || activities.contains(activity)) {
             return true;
+        }
     }
 
     return false;
@@ -353,8 +355,9 @@ KTextEditor::Document *KateApp::openDocUrl(const QUrl &url, const QString &encod
         } else {
             doc = mainWindow->viewManager()->openUrl(url, QString(), true, isTempFile);
         }
-    } else
+    } else {
         KMessageBox::sorry(mainWindow, i18n("The file '%1' could not be opened: it is not a normal file, it is a folder.", url.url()));
+    }
 
     return doc;
 }
@@ -487,8 +490,9 @@ void KateApp::remoteMessageReceived(const QString &message, QObject *)
      * try to parse message, ignore if no object
      */
     const QJsonDocument jsonMessage = QJsonDocument::fromJson(message.toUtf8());
-    if (!jsonMessage.isObject())
+    if (!jsonMessage.isObject()) {
         return;
+    }
 
     /**
      * open all passed urls

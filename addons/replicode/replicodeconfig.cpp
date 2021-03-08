@@ -8,7 +8,16 @@
 #include "replicodesettings.h"
 #include "ui_config.h"
 
-enum TraceLevels { CompositeInputs = 1 << 0, CompositeOutputs = 1 << 1, ModelInputs = 1 << 2, ModelOutputs = 1 << 3, PredictionMonitoring = 1 << 4, GoalMonitoring = 1 << 5, ModelRevision = 1 << 6, ModelCompositeInjection = 1 << 7 };
+enum TraceLevels {
+    CompositeInputs = 1 << 0,
+    CompositeOutputs = 1 << 1,
+    ModelInputs = 1 << 2,
+    ModelOutputs = 1 << 3,
+    PredictionMonitoring = 1 << 4,
+    GoalMonitoring = 1 << 5,
+    ModelRevision = 1 << 6,
+    ModelCompositeInjection = 1 << 7
+};
 
 ReplicodeConfig::ReplicodeConfig(QWidget *parent)
     : QTabWidget(parent)
@@ -103,22 +112,30 @@ void ReplicodeConfig::save()
     m_settings->userOperatorPath = m_ui->userModulePath->text();
 
     int trace = 0;
-    if (m_ui->traceCompInputs->isChecked())
+    if (m_ui->traceCompInputs->isChecked()) {
         trace |= CompositeInputs;
-    if (m_ui->traceCompOutputs->isChecked())
+    }
+    if (m_ui->traceCompOutputs->isChecked()) {
         trace |= CompositeOutputs;
-    if (m_ui->traceModelIn->isChecked())
+    }
+    if (m_ui->traceModelIn->isChecked()) {
         trace |= ModelInputs;
-    if (m_ui->traceModelOut->isChecked())
+    }
+    if (m_ui->traceModelOut->isChecked()) {
         trace |= ModelOutputs;
-    if (m_ui->tracePredMon->isChecked())
+    }
+    if (m_ui->tracePredMon->isChecked()) {
         trace |= PredictionMonitoring;
-    if (m_ui->traceGoalMon->isChecked())
+    }
+    if (m_ui->traceGoalMon->isChecked()) {
         trace |= GoalMonitoring;
-    if (m_ui->traceModelRev->isChecked())
+    }
+    if (m_ui->traceModelRev->isChecked()) {
         trace |= ModelRevision;
-    if (m_ui->traceModComInj->isChecked())
+    }
+    if (m_ui->traceModComInj->isChecked()) {
         trace |= ModelCompositeInjection;
+    }
     m_settings->traceLevels = trace;
     m_settings->save();
 }

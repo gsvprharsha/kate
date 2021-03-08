@@ -53,7 +53,9 @@ QString longestCommonPrefix(std::vector<QString> const &strs)
     }
 
     // get the min length
-    auto it = std::min_element(strs.begin(), strs.end(), [](const QString &lhs, const QString &rhs) { return lhs.size() < rhs.size(); });
+    auto it = std::min_element(strs.begin(), strs.end(), [](const QString &lhs, const QString &rhs) {
+        return lhs.size() < rhs.size();
+    });
     const int n = it->size();
 
     for (int pos = 0; pos < n; pos++) { // check each character
@@ -123,7 +125,9 @@ bool detail::TabswitcherFilesModel::insertDocument(int row, KTextEditor::Documen
 
 bool detail::TabswitcherFilesModel::removeDocument(KTextEditor::Document *document)
 {
-    auto it = std::find_if(data_.begin(), data_.end(), [document](FilenameListItem &item) { return item.document == document; });
+    auto it = std::find_if(data_.begin(), data_.end(), [document](FilenameListItem &item) {
+        return item.document == document;
+    });
     if (it == data_.end()) {
         return false;
     }
@@ -182,7 +186,7 @@ KTextEditor::Document *detail::TabswitcherFilesModel::item(int row) const
 void detail::TabswitcherFilesModel::updateItems()
 {
     post_process(data_);
-    emit dataChanged(createIndex(0, 0), createIndex(data_.size() - 1, 1), {});
+    Q_EMIT dataChanged(createIndex(0, 0), createIndex(data_.size() - 1, 1), {});
 }
 
 int detail::TabswitcherFilesModel::columnCount(const QModelIndex &parent) const
@@ -201,10 +205,11 @@ QVariant detail::TabswitcherFilesModel::data(const QModelIndex &index, int role)
 {
     if (role == Qt::DisplayRole) {
         const auto &row = data_[index.row()];
-        if (index.column() == 0)
+        if (index.column() == 0) {
             return row.displayPathPrefix;
-        else
+        } else {
             return row.documentName();
+        }
     } else if (role == Qt::DecorationRole) {
         if (index.column() == 1) {
             const auto &row = data_[index.row()];
@@ -214,15 +219,17 @@ QVariant detail::TabswitcherFilesModel::data(const QModelIndex &index, int role)
         const auto &row = data_[index.row()];
         return row.fullPath();
     } else if (role == Qt::TextAlignmentRole) {
-        if (index.column() == 0)
+        if (index.column() == 0) {
             return Qt::AlignRight + Qt::AlignVCenter;
-        else
+        } else {
             return Qt::AlignVCenter;
+        }
     } else if (role == Qt::ForegroundRole) {
-        if (index.column() == 0)
+        if (index.column() == 0) {
             return QBrush(Qt::darkGray);
-        else
+        } else {
             return QVariant();
+        }
     }
     return QVariant();
 }

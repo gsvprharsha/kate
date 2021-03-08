@@ -9,11 +9,7 @@
 
 <title>Working with Plugins</title>
 
-<para>&kate; offers several plugins. There are two types of these plugins:
-some are written in native C++, while others are written in the Python programming
-language. There are subtle differences in these, described below.</para>
-
-<para>You can enable any type of plugin in the <link
+<para>You can enable the individual plugins in the <link
 linkend="configuring-kate-configdialog">configuration dialog</link>, which also
 provides access to additional configuration options for plugins that require
 it.</para>
@@ -820,7 +816,7 @@ which match the path or file extension selected from the submenu.</para>
 <sect2 id="colorpicker-intro">
 <title>Introduction</title>
 
-<para>This plugin adds an inline color preview/picker to colors in the text (&eg;, <literal>#FFFFFF</literal>, 
+<para>This plugin adds an inline color preview/picker to colors in the text (&eg;, <literal>#FFFFFF</literal>,
 <literal>white</literal>).</para>
 
 <para>To load this plugin open &kate;'s configuration dialog under <menuchoice><guimenu>Settings</guimenu>
@@ -2078,6 +2074,14 @@ You can also mix version control and files based on filters.
 }
 </screen>
 
+<para>
+In case you have a <filename>.kateproject</filename> file tracked by a control
+version system, but you need to tweak the configuration for a particular
+workspace, you can save those changes to a separated file named
+<filename>.kateproject.local</filename>. The content of this file will take
+precedence over <filename>.kateproject</filename>.
+</para>
+
 </sect3>
 
 </sect2>
@@ -2137,7 +2141,7 @@ using <command>cppcheck</command> and to generate a report showing filename, lin
 </term>
 <listitem>
 <para>Text entered in this tab will be saved in the file
-<filename><replaceable>projectname</replaceable>.kateproject.notes</filename>.</para>
+<filename>.kateproject.notes</filename>.</para>
 </listitem>
 </varlistentry>
 
@@ -3627,6 +3631,13 @@ run in the built-in terminal that automatically open a file in an editor will op
 them in &kate; instead of the default editor configured in your shell.  You will
 not be able to continue using the terminal until you have closed the file in &kate;,
 so the calling program is aware you have finished editing the file.</para></listitem>
+</varlistentry>
+
+<varlistentry>
+<term><guilabel>Hide &konsole; on pressing 'Esc'</guilabel></term>
+<listitem><para>This allows closing the built-in terminal by pressing the &Esc; key. May cause issues with terminal applications
+that use &Esc; key, &eg; <application>vim</application>. Add such applications in the text input box below.
+The items in the list should be separated with comma.</para></listitem>
 </varlistentry>
 
 </variablelist>

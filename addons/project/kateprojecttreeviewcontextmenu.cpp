@@ -6,16 +6,12 @@
  */
 
 #include "kateprojecttreeviewcontextmenu.h"
-
-#include <kio_version.h>
-#if KIO_VERSION < QT_VERSION_CHECK(5, 71, 0)
-#include <KRun>
-#else
-#include <KIO/ApplicationLauncherJob>
-#include <KIO/JobUiDelegate>
-#endif
+#include "git/gitutils.h"
+#include "kateprojectviewtree.h"
 
 #include <KApplicationTrader>
+#include <KIO/ApplicationLauncherJob>
+#include <KIO/JobUiDelegate>
 #include <KIO/OpenFileManagerWindowJob>
 #include <KLocalizedString>
 #include <KNS3/KMoreTools>
@@ -24,50 +20,14 @@
 
 #include <QApplication>
 #include <QClipboard>
-#include <QDebug>
-#include <QDir>
 #include <QFileInfo>
 #include <QIcon>
 #include <QMenu>
 #include <QMimeDatabase>
 #include <QMimeType>
-#include <QProcess>
 #include <QStandardPaths>
 
-KateProjectTreeViewContextMenu::KateProjectTreeViewContextMenu()
-{
-}
-
-KateProjectTreeViewContextMenu::~KateProjectTreeViewContextMenu()
-{
-}
-
-static bool isGit(const QString &filename)
-{
-    QFileInfo fi(filename);
-    QDir dir(fi.absoluteDir());
-    QProcess git;
-    git.setWorkingDirectory(dir.absolutePath());
-    QStringList args;
-    // git ls-files -z results a bytearray where each entry is \0-terminated.
-    // NOTE: Without -z, Umlauts such as "Der Bäcker/Das Brötchen.txt" do not work (#389415, #402213)
-    args << QStringLiteral("ls-files") << QStringLiteral("-z") << fi.fileName();
-    git.start(QStringLiteral("git"), args);
-    bool isGit = false;
-    if (git.waitForStarted() && git.waitForFinished(-1)) {
-        const QList<QByteArray> byteArrayList = git.readAllStandardOutput().split('\0');
-        const QString fn = fi.fileName();
-        for (const QByteArray &byteArray : byteArrayList) {
-            if (fn == QString::fromUtf8(byteArray)) {
-                isGit = true;
-                break;
-            }
-        }
-    }
-    return isGit;
-}
-
-void KateProjectTreeViewContextMenu::exec(const QString &filename, const QPoint &pos, QWidget *parent)
+void KateProjectTreeViewContextMenu::exec(const QString &filename, const QModelIndex &index, const QPoint &pos, KateProjectViewTree *parent)
 {
     /**
      * Create context menu
@@ -107,12 +67,15 @@ void KateProjectTreeViewContextMenu::exec(const QString &filename, const QPoint 
      */
     auto filePropertiesAction = menu.addAction(QIcon::fromTheme(QStringLiteral("dialog-object-properties")), i18n("Properties"));
 
+    QAction *fileHistory = nullptr;
     /**
      * Git menu
      */
     KMoreToolsMenuFactory menuFactory(QStringLiteral("kate/addons/project/git-tools"));
     QMenu gitMenu; // must live as long as the maybe filled menu items should live
-    if (isGit(filename)) {
+    if (GitUtils::isGitRepo(QFileInfo(filename).absolutePath())) {
+        fileHistory = menu.addAction(i18n("Show File History"));
+
         menuFactory.fillMenuFromGroupingNames(&gitMenu, {QLatin1String("git-clients-and-actions")}, QUrl::fromLocalFile(filename));
         menu.addSection(i18n("Git:"));
         const auto gitActions = gitMenu.actions();
@@ -122,20 +85,19 @@ void KateProjectTreeViewContextMenu::exec(const QString &filename, const QPoint 
     }
 
     auto handleOpenWith = [parent](QAction *action, const QString &filename) {
-#if KIO_VERSION < QT_VERSION_CHECK(5, 71, 0)
-        const QString openWith = action->data().toString();
-        if (KService::Ptr app = KService::serviceByDesktopPath(openWith)) {
-            KRun::runService(*app, {QUrl::fromLocalFile(filename)}, parent);
-        }
-#else
         KService::Ptr app = KService::serviceByDesktopPath(action->data().toString());
         // If app is null, ApplicationLauncherJob will invoke the open-with dialog
         auto *job = new KIO::ApplicationLauncherJob(app);
         job->setUrls({QUrl::fromLocalFile(filename)});
         job->setUiDelegate(new KIO::JobUiDelegate(KJobUiDelegate::AutoHandlingEnabled, parent));
         job->start();
-#endif
     };
+
+    // we can ATM only handle file renames
+    QAction *rename = nullptr;
+    if (index.data(KateProjectItem::TypeRole).toInt() == KateProjectItem::File) {
+        rename = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-rename")), i18n("&Rename"));
+    }
 
     /**
      * run menu and handle the triggered action
@@ -154,6 +116,10 @@ void KateProjectTreeViewContextMenu::exec(const QString &filename, const QPoint 
             QDialog *dlg = new KPropertiesDialog(fileItem);
             dlg->setAttribute(Qt::WA_DeleteOnClose);
             dlg->show();
+        } else if (rename && action == rename) {
+            parent->edit(index);
+        } else if (action == fileHistory) {
+            showFileHistory(index.data(Qt::UserRole).toString());
         } else {
             // One of the git actions was triggered
         }

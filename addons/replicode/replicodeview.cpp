@@ -46,13 +46,21 @@ ReplicodeView::ReplicodeView(KTextEditor::Plugin *plugin, KTextEditor::MainWindo
     actionCollection()->addAction(QStringLiteral("katereplicode_stop"), m_stopAction);
     m_stopAction->setEnabled(false);
 
-    m_toolview = m_mainWindow->createToolView(plugin, QStringLiteral("kate_private_plugin_katereplicodeplugin_run"), KTextEditor::MainWindow::Bottom, QIcon::fromTheme(QStringLiteral("code-block")), i18n("Replicode Output"));
+    m_toolview = m_mainWindow->createToolView(plugin,
+                                              QStringLiteral("kate_private_plugin_katereplicodeplugin_run"),
+                                              KTextEditor::MainWindow::Bottom,
+                                              QIcon::fromTheme(QStringLiteral("code-block")),
+                                              i18n("Replicode Output"));
     m_replicodeOutput = new QListWidget(m_toolview);
     m_replicodeOutput->setSelectionMode(QAbstractItemView::ContiguousSelection);
     connect(m_replicodeOutput, &QListWidget::itemActivated, this, &ReplicodeView::outputClicked);
     m_mainWindow->hideToolView(m_toolview);
 
-    m_configSidebar = m_mainWindow->createToolView(plugin, QStringLiteral("kate_private_plugin_katereplicodeplugin_config"), KTextEditor::MainWindow::Right, QIcon::fromTheme(QStringLiteral("code-block")), i18n("Replicode Config"));
+    m_configSidebar = m_mainWindow->createToolView(plugin,
+                                                   QStringLiteral("kate_private_plugin_katereplicodeplugin_config"),
+                                                   KTextEditor::MainWindow::Right,
+                                                   QIcon::fromTheme(QStringLiteral("code-block")),
+                                                   i18n("Replicode Config"));
     m_configView = new ReplicodeConfig(m_configSidebar);
 
     m_runButton = new QPushButton(i18nc("shortcut for action", "Run (%1)", m_runAction->shortcut().toString()));
@@ -77,7 +85,8 @@ ReplicodeView::~ReplicodeView()
 
 void ReplicodeView::viewChanged()
 {
-    if (m_mainWindow->activeView() && m_mainWindow->activeView()->document() && m_mainWindow->activeView()->document()->url().fileName().endsWith(QLatin1String(".replicode"))) {
+    if (m_mainWindow->activeView() && m_mainWindow->activeView()->document()
+        && m_mainWindow->activeView()->document()->url().fileName().endsWith(QLatin1String(".replicode"))) {
         m_mainWindow->showToolView(m_configSidebar);
     } else {
         m_mainWindow->hideToolView(m_configSidebar);
@@ -129,8 +138,9 @@ void ReplicodeView::runReplicode()
 
     m_replicodeOutput->clear();
 
-    if (m_executor)
+    if (m_executor) {
         delete m_executor;
+    }
     m_executor = new QProcess(this);
     m_executor->setWorkingDirectory(sourceFile.canonicalPath());
     connect(m_executor, &QProcess::readyReadStandardError, this, &ReplicodeView::gotStderr);
@@ -159,18 +169,21 @@ void ReplicodeView::outputClicked(QListWidgetItem *item)
     QString output = item->text();
     QStringList pieces = output.split(QLatin1Char(':'));
 
-    if (pieces.length() < 2)
+    if (pieces.length() < 2) {
         return;
+    }
 
     QFileInfo file(pieces[0]);
-    if (!file.isReadable())
+    if (!file.isReadable()) {
         return;
+    }
 
     bool ok = false;
     int lineNumber = pieces[1].toInt(&ok);
     qDebug() << lineNumber;
-    if (!ok)
+    if (!ok) {
         return;
+    }
 
     KTextEditor::View *doc = m_mainWindow->openUrl(QUrl::fromLocalFile(pieces[0]));
     doc->setCursorPosition(KTextEditor::Cursor(lineNumber, 0));
@@ -212,8 +225,9 @@ void ReplicodeView::gotStderr()
     const auto lines = output.split('\n');
     for (QByteArray line : lines) {
         line = line.simplified();
-        if (line.isEmpty())
+        if (line.isEmpty()) {
             continue;
+        }
         QListWidgetItem *item = new QListWidgetItem(QString::fromLocal8Bit(line));
         item->setForeground(Qt::red);
         m_replicodeOutput->addItem(item);
@@ -227,11 +241,13 @@ void ReplicodeView::gotStdout()
     const auto lines = output.split('\n');
     for (QByteArray line : lines) {
         line = line.simplified();
-        if (line.isEmpty())
+        if (line.isEmpty()) {
             continue;
+        }
         QListWidgetItem *item = new QListWidgetItem(QString::fromLocal8Bit(' ' + line));
-        if (line[0] == '>')
+        if (line[0] == '>') {
             item->setForeground(Qt::gray);
+        }
         m_replicodeOutput->addItem(item);
     }
     m_replicodeOutput->scrollToBottom();

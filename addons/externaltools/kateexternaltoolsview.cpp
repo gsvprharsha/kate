@@ -32,7 +32,10 @@
 #include <vector>
 
 // BEGIN KateExternalToolsMenuAction
-KateExternalToolsMenuAction::KateExternalToolsMenuAction(const QString &text, KActionCollection *collection, KateExternalToolsPlugin *plugin, KTextEditor::MainWindow *mw)
+KateExternalToolsMenuAction::KateExternalToolsMenuAction(const QString &text,
+                                                         KActionCollection *collection,
+                                                         KateExternalToolsPlugin *plugin,
+                                                         KTextEditor::MainWindow *mw)
     : KActionMenu(text, mw)
     , m_plugin(plugin)
     , m_mainwindow(mw)
@@ -51,8 +54,9 @@ void KateExternalToolsMenuAction::reload()
     // clear action collection
     bool needs_readd = (m_actionCollection->takeAction(this) != nullptr);
     m_actionCollection->clear();
-    if (needs_readd)
+    if (needs_readd) {
         m_actionCollection->addAction(QStringLiteral("tools_external"), this);
+    }
     menu()->clear();
 
     // create tool actions
@@ -62,11 +66,13 @@ void KateExternalToolsMenuAction::reload()
     // first add categorized actions, such that the submenus appear at the top
     for (auto tool : m_plugin->tools()) {
         if (tool->hasexec) {
-            auto a = new QAction(tool->translatedName(), this);
+            auto a = new QAction(tool->translatedName().replace(QLatin1Char('&'), QLatin1String("&&")), this);
             a->setIcon(QIcon::fromTheme(tool->icon));
             a->setData(QVariant::fromValue(tool));
 
-            connect(a, &QAction::triggered, [this, a]() { m_plugin->runTool(*a->data().value<KateExternalTool *>(), m_mainwindow->activeView()); });
+            connect(a, &QAction::triggered, [this, a]() {
+                m_plugin->runTool(*a->data().value<KateExternalTool *>(), m_mainwindow->activeView());
+            });
 
             m_actionCollection->addAction(tool->actionName, a);
             if (!tool->category.isEmpty()) {
@@ -109,7 +115,7 @@ void KateExternalToolsMenuAction::slotViewChanged(KTextEditor::View *view)
     }
 
     disconnect(m_docUrlChangedConnection);
-    m_docUrlChangedConnection = connect(view->document(), &KTextEditor::Document::documentUrlChanged, this, [this](KTextEditor::Document* doc) {
+    m_docUrlChangedConnection = connect(view->document(), &KTextEditor::Document::documentUrlChanged, this, [this](KTextEditor::Document *doc) {
         updateActionState(doc);
     });
 
@@ -145,7 +151,6 @@ KateExternalToolsPluginView::KateExternalToolsPluginView(KTextEditor::MainWindow
     , m_plugin(plugin)
     , m_mainWindow(mainWindow)
     , m_outputDoc(new QTextDocument(this))
-    , m_statusDoc(new QTextDocument(this))
 {
     m_plugin->registerPluginView(this);
 
@@ -195,19 +200,21 @@ KTextEditor::MainWindow *KateExternalToolsPluginView::mainWindow() const
 void KateExternalToolsPluginView::createToolView()
 {
     if (!m_toolView) {
-        m_toolView = mainWindow()->createToolView(m_plugin, QStringLiteral("ktexteditor_plugin_externaltools"), KTextEditor::MainWindow::Bottom, QIcon::fromTheme(QStringLiteral("system-run")), i18n("External Tools"));
+        m_toolView = mainWindow()->createToolView(m_plugin,
+                                                  QStringLiteral("ktexteditor_plugin_externaltools"),
+                                                  KTextEditor::MainWindow::Bottom,
+                                                  QIcon::fromTheme(QStringLiteral("system-run")),
+                                                  i18n("External Tools"));
 
         m_ui = new Ui::ToolView();
         m_ui->setupUi(m_toolView);
 
         // set the documents
         m_ui->teOutput->setDocument(m_outputDoc);
-        m_ui->teStatus->setDocument(m_statusDoc);
 
         // use fixed font for displaying status and output text
         const auto fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
         m_ui->teOutput->setFont(fixedFont);
-        m_ui->teStatus->setFont(fixedFont);
 
         // close button to delete tool view
         auto btnClose = new QToolButton();
@@ -218,31 +225,16 @@ void KateExternalToolsPluginView::createToolView()
     }
 }
 
-void KateExternalToolsPluginView::showToolView(ToolViewFocus tab)
+void KateExternalToolsPluginView::showToolView()
 {
     createToolView();
-
-    if (tab == ToolViewFocus::OutputTab) {
-        m_ui->tabWidget->setCurrentWidget(m_ui->tabOutput);
-    } else {
-        m_ui->tabWidget->setCurrentWidget(m_ui->tabStatus);
-    }
-
+    m_ui->tabWidget->setCurrentWidget(m_ui->tabOutput);
     mainWindow()->showToolView(m_toolView);
 }
 
 void KateExternalToolsPluginView::clearToolView()
 {
     m_outputDoc->clear();
-    m_statusDoc->clear();
-}
-
-void KateExternalToolsPluginView::addToolStatus(const QString &message)
-{
-    QTextCursor cursor(m_statusDoc);
-    cursor.movePosition(QTextCursor::End);
-    cursor.insertText(message);
-    cursor.insertText(QStringLiteral("\n"));
 }
 
 void KateExternalToolsPluginView::setOutputData(const QString &data)

@@ -25,8 +25,8 @@
 
 #include <QApplication>
 #include <QCryptographicHash>
-#include <QDBusReply>
 #include <QDBusConnectionInterface>
+#include <QDBusReply>
 #include <QDir>
 #include <QInputDialog>
 #include <QScopedPointer>
@@ -97,7 +97,7 @@ void KateSessionManager::updateSessionList()
     }
 
     if (changed) {
-        emit sessionListChanged();
+        Q_EMIT sessionListChanged();
     }
 }
 
@@ -121,7 +121,8 @@ bool KateSessionManager::activateSession(KateSession::Ptr session, const bool cl
                                            QString(),
                                            KStandardGuiItem::yes(),
                                            KStandardGuiItem::no(),
-                                           QStringLiteral("katesessionmanager_switch_instance")) == KMessageBox::Yes) {
+                                           QStringLiteral("katesessionmanager_switch_instance"))
+                == KMessageBox::Yes) {
                 instances[session->name()]->dbus_if->call(QStringLiteral("activate"));
                 cleanupRunningKateAppInstanceMap(&instances);
                 return false;
@@ -155,7 +156,7 @@ bool KateSessionManager::activateSession(KateSession::Ptr session, const bool cl
         loadSession(session);
     }
 
-    emit sessionChanged();
+    Q_EMIT sessionChanged();
     return true;
 }
 
@@ -252,7 +253,7 @@ KateSession::Ptr KateSessionManager::giveSession(const QString &name)
     // Due to this add to m_sessions will updateSessionList() no signal emit,
     // but it's important to add. Otherwise could it be happen that m_activeSession
     // is not part of m_sessions but a double
-    emit sessionListChanged();
+    Q_EMIT sessionListChanged();
 
     return s;
 }
@@ -263,11 +264,17 @@ bool KateSessionManager::deleteSession(KateSession::Ptr session)
         return false;
     }
 
+    KConfigGroup c(KSharedConfig::openConfig(), "General");
+    if (c.readEntry("Last Session") == session->name()) {
+        c.writeEntry("Last Session", QString());
+        c.sync();
+    }
+
     QFile::remove(session->file());
     m_sessions.remove(session->name());
     // Due to this remove from m_sessions will updateSessionList() no signal emit,
     // but this way is there no delay between deletion and information
-    emit sessionListChanged();
+    Q_EMIT sessionListChanged();
 
     return true;
 }
@@ -305,7 +312,9 @@ QString KateSessionManager::renameSession(KateSession::Ptr session, const QStrin
     KIO::CopyJob *job = KIO::move(srcUrl, dstUrl, KIO::HideProgressInfo);
 
     if (!job->exec()) {
-        KMessageBox::sorry(QApplication::activeWindow(), i18n("The session could not be renamed to \"%1\". Failed to write to \"%2\"", newName, newFile), i18n("Session Renaming"));
+        KMessageBox::sorry(QApplication::activeWindow(),
+                           i18n("The session could not be renamed to \"%1\". Failed to write to \"%2\"", newName, newFile),
+                           i18n("Session Renaming"));
         return QString();
     }
 
@@ -314,10 +323,10 @@ QString KateSessionManager::renameSession(KateSession::Ptr session, const QStrin
     session->setFile(newFile);
     session->config()->sync();
     // updateSessionList() will this edit not notice, so force signal
-    emit sessionListChanged();
+    Q_EMIT sessionListChanged();
 
     if (session == activeSession()) {
-        emit sessionChanged();
+        Q_EMIT sessionChanged();
     }
 
     return name;
@@ -327,7 +336,11 @@ void KateSessionManager::saveSessionTo(KConfig *sc) const
 {
     // Clear the session file to avoid to accumulate outdated entries
     for (const auto &group : sc->groupList()) {
-        sc->deleteGroup(group);
+        // Don't delete groups for loaded documents that have
+        // ViewSpace config in session but do not have any views.
+        if (!isViewLessDocumentViewSpaceGroup(group)) {
+            sc->deleteGroup(group);
+        }
     }
 
     // save plugin configs and which plugins to load
@@ -435,7 +448,7 @@ void KateSessionManager::sessionSaveAs()
     m_activeSession = ns;
     saveActiveSession();
 
-    emit sessionChanged();
+    Q_EMIT sessionChanged();
 }
 
 QString KateSessionManager::askForNewSessionName(KateSession::Ptr session, const QString &newName)
@@ -580,7 +593,12 @@ void KateSessionManager::updateJumpListActions(const QStringList &sessionList)
     QStringList newActions = df->readActions();
 
     // try to keep existing custom actions intact, only remove our "Session" actions and add them back later
-    newActions.erase(std::remove_if(newActions.begin(), newActions.end(), [](const QString &action) { return action.startsWith(QLatin1String("Session ")); }), newActions.end());
+    newActions.erase(std::remove_if(newActions.begin(),
+                                    newActions.end(),
+                                    [](const QString &action) {
+                                        return action.startsWith(QLatin1String("Session "));
+                                    }),
+                     newActions.end());
 
     // Limit the number of list entries we like to offer
     const int maxEntryCount = std::min(sessionList.count(), 10);
@@ -595,7 +613,8 @@ void KateSessionManager::updateJumpListActions(const QStringList &sessionList)
     sessionActions.reserve(maxEntryCount);
 
     for (int i = 0; i < maxEntryCount; ++i) {
-        sessionActions << QStringLiteral("Session %1").arg(QString::fromLatin1(QCryptographicHash::hash(sessionSubList.at(i).toUtf8(), QCryptographicHash::Md5).toHex()));
+        sessionActions
+            << QStringLiteral("Session %1").arg(QString::fromLatin1(QCryptographicHash::hash(sessionSubList.at(i).toUtf8(), QCryptographicHash::Md5).toHex()));
     }
 
     newActions += sessionActions;
@@ -628,6 +647,29 @@ void KateSessionManager::updateJumpListActions(const QStringList &sessionList)
     }
 
     df->desktopGroup().writeXdgListEntry("Actions", newActions);
+}
+
+bool KateSessionManager::isViewLessDocumentViewSpaceGroup(const QString &group)
+{
+    if (KateApp::self()->sessionManager()->activeSession()->isAnonymous()) {
+        return false;
+    }
+
+    if (!group.startsWith(QStringLiteral("MainWindow"))) {
+        return false;
+    }
+
+    static const QRegularExpression re(QStringLiteral("^MainWindow\\d+\\-ViewSpace\\s\\d+\\s(.*)$"));
+    QRegularExpressionMatch match = re.match(group);
+    if (match.hasMatch()) {
+        QUrl url(match.captured(1));
+        auto *docMan = KateApp::self()->documentManager();
+        auto *doc = docMan->findDocument(url);
+        if (doc && doc->views().empty() && docMan->documentList().contains(doc)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // END KateSessionManager

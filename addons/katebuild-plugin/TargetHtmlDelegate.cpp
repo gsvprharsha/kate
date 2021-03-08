@@ -113,7 +113,7 @@ QWidget *TargetHtmlDelegate::createEditor(QWidget *dparent, const QStyleOptionVi
         editor = e;
     }
     editor->setAutoFillBackground(true);
-    emit sendEditStart();
+    Q_EMIT sendEditStart();
     connect(editor, &QWidget::destroyed, this, &TargetHtmlDelegate::editEnded);
     return editor;
 }
@@ -124,12 +124,14 @@ void TargetHtmlDelegate::setEditorData(QWidget *editor, const QModelIndex &index
 
     if (index.column() == 1) {
         UrlInserter *ledit = static_cast<UrlInserter *>(editor);
-        if (ledit)
+        if (ledit) {
             ledit->lineEdit()->setText(value);
+        }
     } else {
         QLineEdit *ledit = static_cast<QLineEdit *>(editor);
-        if (ledit)
+        if (ledit) {
             ledit->setText(value);
+        }
     }
 }
 

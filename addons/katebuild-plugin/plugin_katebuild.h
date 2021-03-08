@@ -43,8 +43,6 @@
 #include "targets.h"
 #include "ui_build.h"
 
-class BuildOutputHighlighter;
-
 /******************************************************************/
 class KateBuildView : public QObject, public KXMLGUIClient, public KTextEditor::SessionConfigInterface
 {
@@ -133,7 +131,7 @@ private:
 
     KTextEditor::MainWindow *m_win;
     QWidget *m_toolView;
-    Ui::build m_buildUi {};
+    Ui::build m_buildUi{};
     QWidget *m_buildWidget;
     int m_outputWidgetWidth;
     TargetsUi *m_targetsUi;
@@ -156,7 +154,6 @@ private:
     QPointer<KTextEditor::Message> m_infoMessage;
     QPointer<QAction> m_showMarks;
     QHash<KTextEditor::Document *, QPointer<KTextEditor::Document>> m_markedDocs;
-    BuildOutputHighlighter* buildHl;
 
     /**
      * current project plugin view, if any

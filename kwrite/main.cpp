@@ -20,8 +20,6 @@
 #include <KDBusService>
 #include <KLocalizedString>
 #include <KMessageBox>
-#include <kcoreaddons_version.h> // for KAboutData::setDesktopFileName()
-#include <kcrash_version.h>
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -63,9 +61,14 @@ extern "C" Q_DECL_EXPORT int main(int argc, char **argv)
      * we only activate this on Windows, it seems to creates problems on unices
      * (and there the fractional scaling with the QT_... env vars as set by KScreen works)
      * see bug 416078
+     *
+     * we switched to Qt::HighDpiScaleFactorRoundingPolicy::RoundPreferFloor because of font rendering issues
+     * we follow what Krita does here, see https://invent.kde.org/graphics/krita/-/blob/master/krita/main.cc
+     * we raise the Qt requirement to  5.15 as it seems some patches went in after 5.14 that are needed
+     * see Krita comments, too
      */
-#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0) && defined(Q_OS_WIN)
-    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0) && defined(Q_OS_WIN)
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::RoundPreferFloor);
 #endif
 
     /**
@@ -96,8 +99,14 @@ extern "C" Q_DECL_EXPORT int main(int argc, char **argv)
     /**
      * then use i18n and co
      */
-    KAboutData aboutData(
-        QStringLiteral("kwrite"), i18n("KWrite"), QStringLiteral(KWRITE_VERSION), i18n("KWrite - Text Editor"), KAboutLicense::LGPL_V2, i18n("(c) 2000-2021 The Kate Authors"), QString(), QStringLiteral("https://kate-editor.org"));
+    KAboutData aboutData(QStringLiteral("kwrite"),
+                         i18n("KWrite"),
+                         QStringLiteral(KWRITE_VERSION),
+                         i18n("KWrite - Text Editor"),
+                         KAboutLicense::LGPL_V2,
+                         i18n("(c) 2000-2021 The Kate Authors"),
+                         QString(),
+                         QStringLiteral("https://kate-editor.org"));
 
     /**
      * right dbus prefix == org.kde.
@@ -115,11 +124,16 @@ extern "C" Q_DECL_EXPORT int main(int argc, char **argv)
     aboutData.addAuthor(i18n("Christoph Cullmann"), i18n("Maintainer"), QStringLiteral("cullmann@kde.org"), QStringLiteral("https://cullmann.io"));
     aboutData.addAuthor(i18n("Dominik Haumann"), i18n("Core Developer"), QStringLiteral("dhaumann@kde.org"));
     aboutData.addAuthor(i18n("Anders Lund"), i18n("Core Developer"), QStringLiteral("anders@alweb.dk"), QStringLiteral("https://www.alweb.dk"));
-    aboutData.addAuthor(i18n("Joseph Wenninger"), i18n("Core Developer"), QStringLiteral("jowenn@kde.org"), QStringLiteral("http://stud3.tuwien.ac.at/~e9925371"));
+    aboutData.addAuthor(i18n("Joseph Wenninger"),
+                        i18n("Core Developer"),
+                        QStringLiteral("jowenn@kde.org"),
+                        QStringLiteral("http://stud3.tuwien.ac.at/~e9925371"));
     aboutData.addAuthor(i18n("Hamish Rodda"), i18n("Core Developer"), QStringLiteral("rodda@kde.org"));
     aboutData.addAuthor(i18n("Waldo Bastian"), i18n("The cool buffersystem"), QStringLiteral("bastian@kde.org"));
     aboutData.addAuthor(i18n("Charles Samuels"), i18n("The Editing Commands"), QStringLiteral("charles@kde.org"));
-    aboutData.addAuthor(i18n("Matt Newell"), i18nc("Credit text for someone that did testing and some other similar things", "Testing, ..."), QStringLiteral("newellm@proaxis.com"));
+    aboutData.addAuthor(i18n("Matt Newell"),
+                        i18nc("Credit text for someone that did testing and some other similar things", "Testing, ..."),
+                        QStringLiteral("newellm@proaxis.com"));
     aboutData.addAuthor(i18n("Michael Bartl"), i18n("Former Core Developer"), QStringLiteral("michael.bartl1@chello.at"));
     aboutData.addAuthor(i18n("Michael McCallum"), i18n("Core Developer"), QStringLiteral("gholam@xtra.co.nz"));
     aboutData.addAuthor(i18n("Jochen Wilhemly"), i18n("KWrite Author"), QStringLiteral("digisnap@cs.tu-berlin.de"));
@@ -129,7 +143,10 @@ extern "C" Q_DECL_EXPORT int main(int argc, char **argv)
     aboutData.addAuthor(i18n("Glen Parker"), i18n("KWrite Undo History, Kspell integration"), QStringLiteral("glenebob@nwlink.com"));
     aboutData.addAuthor(i18n("Scott Manson"), i18n("KWrite XML Syntax highlighting support"), QStringLiteral("sdmanson@alltel.net"));
     aboutData.addAuthor(i18n("John Firebaugh"), i18n("Patches and more"), QStringLiteral("jfirebaugh@kde.org"));
-    aboutData.addAuthor(i18n("Gerald Senarclens de Grancy"), i18n("QA and Scripting"), QStringLiteral("oss@senarclens.eu"), QStringLiteral("http://find-santa.eu/"));
+    aboutData.addAuthor(i18n("Gerald Senarclens de Grancy"),
+                        i18n("QA and Scripting"),
+                        QStringLiteral("oss@senarclens.eu"),
+                        QStringLiteral("http://find-santa.eu/"));
 
     aboutData.addCredit(i18n("Matteo Merli"), i18n("Highlighting for RPM Spec-Files, Perl, Diff and more"), QStringLiteral("merlim@libero.it"));
     aboutData.addCredit(i18n("Rocky Scaletta"), i18n("Highlighting for VHDL"), QStringLiteral("rocky@purdue.edu"));
@@ -167,7 +184,9 @@ extern "C" Q_DECL_EXPORT int main(int argc, char **argv)
     aboutData.setupCommandLine(&parser);
 
     // -e/--encoding option
-    const QCommandLineOption useEncoding(QStringList() << QStringLiteral("e") << QStringLiteral("encoding"), i18n("Set encoding for the file to open."), i18n("encoding"));
+    const QCommandLineOption useEncoding(QStringList() << QStringLiteral("e") << QStringLiteral("encoding"),
+                                         i18n("Set encoding for the file to open."),
+                                         i18n("encoding"));
     parser.addOption(useEncoding);
 
     // -l/--line option
@@ -207,7 +226,8 @@ extern "C" Q_DECL_EXPORT int main(int argc, char **argv)
         bool nav = false;
         int line = 0, column = 0;
 
-        QTextCodec *codec = parser.isSet(QStringLiteral("encoding")) ? QTextCodec::codecForName(parser.value(QStringLiteral("encoding")).toLocal8Bit()) : nullptr;
+        QTextCodec *codec =
+            parser.isSet(QStringLiteral("encoding")) ? QTextCodec::codecForName(parser.value(QStringLiteral("encoding")).toLocal8Bit()) : nullptr;
 
         if (parser.isSet(QStringLiteral("line"))) {
             line = parser.value(QStringLiteral("line")).toInt() - 1;
@@ -281,12 +301,14 @@ extern "C" Q_DECL_EXPORT int main(int argc, char **argv)
                         QString columnStr = q.queryItemValue(QStringLiteral("column"));
 
                         line = lineStr.toInt();
-                        if (line > 0)
+                        if (line > 0) {
                             line--;
+                        }
 
                         column = columnStr.toInt();
-                        if (column > 0)
+                        if (column > 0) {
                             column--;
+                        }
 
                         t->activeView()->setCursorPosition(KTextEditor::Cursor(line, column));
                     }

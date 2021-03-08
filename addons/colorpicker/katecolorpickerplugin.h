@@ -27,8 +27,8 @@ public:
     ColorPickerInlineNoteProvider(KTextEditor::Document *doc);
     ~ColorPickerInlineNoteProvider();
 
-    static void updateColorMatchingCriteria();
-    // if startLine == -1, update all notes. endLine is inclusive and optional
+    void updateColorMatchingCriteria();
+    // if startLine == -1, update all notes. endLine is optional
     void updateNotes(int startLine=-1, int endLine=-1);
 
     QVector<int> inlineNotes(int line) const override;
@@ -39,14 +39,23 @@ public:
 private:
     KTextEditor::Document *m_doc;
     int m_startChangedLines = -1;
+    int m_endChangedLines = -1;
     int m_previousNumLines = -1;
 
-    // line, <colorNoteIndex, otherColorIndex>
-    mutable QHash<int, QHash<int, int>> m_colorNoteIndices;
+    struct ColorIndices {
+        // When m_putPreviewAfterColor is true, otherColorIndices holds the starting color indices while colorNoteIndices holds the end color indices (and vice
+        // versa) colorNoteIndices[i] corresponds to otherColorIndices[i]
+        QVector<int> colorNoteIndices;
+        QVector<int> otherColorIndices;
+    };
 
-    // config variables shared between all note providers
-    static QRegularExpression s_colorRegEx;
-    static bool s_putPreviewAfterColor;
+    // mutable is used here since InlineNoteProvider::inlineNotes() is const only, and we update the notes lazily (only when inlineNotes() is called)
+    mutable QHash<int, ColorIndices> m_colorNoteIndices;
+
+    QRegularExpression m_colorRegex;
+    QVector<int> m_matchHexLengths;
+    bool m_putPreviewAfterColor;
+    bool m_matchNamedColors;
 };
 
 class KateColorPickerPlugin : public KTextEditor::Plugin
@@ -69,8 +78,7 @@ private:
     KTextEditor::ConfigPage *configPage(int number = 0, QWidget *parent = nullptr) override;
 
     KTextEditor::MainWindow *m_mainWindow;
-    QHash<KTextEditor::Document*, ColorPickerInlineNoteProvider*> m_inlineColorNoteProviders;
-
+    QHash<KTextEditor::Document *, ColorPickerInlineNoteProvider *> m_inlineColorNoteProviders;
 };
 
 #endif // KATE_COLORPICKER_H

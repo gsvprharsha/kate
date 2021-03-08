@@ -14,15 +14,8 @@
 #include <KTextEditor/Document>
 #include <KTextEditor/MainWindow>
 #include <KTextEditor/View>
-
-#include <kcoreaddons_version.h>
-#if KCOREADDONS_VERSION >= QT_VERSION_CHECK(5, 77, 0)
 #include <KAboutPluginDialog>
 #include <KPluginMetaData>
-#else
-#include <KAboutApplicationDialog>
-#include <KAboutData>
-#endif
 #include <KConfigGroup>
 #include <KGuiItem>
 #include <KLocalizedString>
@@ -62,7 +55,9 @@ PreviewWidget::PreviewWidget(KTextEditorPreviewPlugin *core, KTextEditor::MainWi
     const QIcon autoUpdateIcon = QIcon::fromTheme(QStringLiteral("media-playback-start"));
     m_autoUpdateAction = new KToggleAction(autoUpdateIcon, i18n("Automatically Update Preview"), this);
     m_autoUpdateAction->setToolTip(i18n("Enable automatic updates of the preview to the current document content"));
-    m_autoUpdateAction->setCheckedState(KGuiItem(i18n("Manually Update Preview"), autoUpdateIcon, i18n("Disable automatic updates of the preview to the current document content")));
+    m_autoUpdateAction->setCheckedState(KGuiItem(i18n("Manually Update Preview"), //
+                                                 autoUpdateIcon,
+                                                 i18n("Disable automatic updates of the preview to the current document content")));
     m_autoUpdateAction->setChecked(false);
     connect(m_autoUpdateAction, &QAction::triggered, this, &PreviewWidget::toggleAutoUpdating);
     addAction(m_autoUpdateAction);
@@ -130,8 +125,9 @@ void PreviewWidget::writeSessionConfig(KConfigGroup &configGroup) const
 
 void PreviewWidget::setTextEditorView(KTextEditor::View *view)
 {
-    if ((view && view == m_previewedTextEditorView && view->document() == m_previewedTextEditorDocument && (!m_previewedTextEditorDocument || m_previewedTextEditorDocument->mode() == m_currentMode)) || !view || !isVisible() ||
-        m_lockAction->isChecked()) {
+    if ((view && view == m_previewedTextEditorView && view->document() == m_previewedTextEditorDocument
+         && (!m_previewedTextEditorDocument || m_previewedTextEditorDocument->mode() == m_currentMode))
+        || !view || !isVisible() || m_lockAction->isChecked()) {
         return;
     }
 
@@ -162,7 +158,8 @@ void PreviewWidget::resetTextEditorView(KTextEditor::Document *document)
         for (const auto &mimeType : qAsConst(mimeTypes)) {
             service = KMimeTypeTrader::self()->preferredService(mimeType, QStringLiteral("KParts/ReadOnlyPart"));
             if (service) {
-                qCDebug(KTEPREVIEW) << "Found preferred kpart service named" << service->name() << "with library" << service->library() << "for mimetype" << mimeType;
+                qCDebug(KTEPREVIEW) << "Found preferred kpart service named" << service->name() << "with library" << service->library() << "for mimetype"
+                                    << mimeType;
 
                 if (service->library().isEmpty()) {
                     qCWarning(KTEPREVIEW) << "Discarding preferred kpart service due to empty library name:" << service->name();
@@ -191,7 +188,11 @@ void PreviewWidget::resetTextEditorView(KTextEditor::Document *document)
 
         // Update if the mode is changed. The signal may also be emitted, when a new
         // url is loaded, therefore wait (QueuedConnection) for the document to load.
-        connect(m_previewedTextEditorDocument, &KTextEditor::Document::modeChanged, this, &PreviewWidget::resetTextEditorView, static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
+        connect(m_previewedTextEditorDocument,
+                &KTextEditor::Document::modeChanged,
+                this,
+                &PreviewWidget::resetTextEditorView,
+                static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
         // Explicitly clear the old document, which otherwise might be accessed in
         // m_partView->setDocument.
         connect(m_previewedTextEditorDocument, &KTextEditor::Document::aboutToClose, this, &PreviewWidget::unsetDocument, Qt::UniqueConnection);
@@ -223,12 +224,7 @@ void PreviewWidget::resetTextEditorView(KTextEditor::Document *document)
             if (kPart) {
                 m_xmlGuiFactory->addClient(kPart);
 
-#if KCOREADDONS_VERSION >= QT_VERSION_CHECK(5, 77, 0)
-                const auto kPartDisplayName = kPart->metaData().name();
-#else
-                const auto kPartDisplayName = kPart->componentData().displayName();
-#endif
-                m_aboutKPartAction->setText(i18n("About %1", kPartDisplayName));
+                m_aboutKPartAction->setText(i18n("About %1", kPart->metaData().name()));
                 m_aboutKPartAction->setEnabled(true);
                 m_kPartMenu->addSeparator();
                 m_kPartMenu->addAction(m_aboutKPartAction);
@@ -349,11 +345,7 @@ void PreviewWidget::removeContainer(QWidget *container, QWidget *parent, QDomEle
 void PreviewWidget::showAboutKPartPlugin()
 {
     if (m_partView && m_partView->kPart()) {
-#if KCOREADDONS_VERSION >= QT_VERSION_CHECK(5, 77, 0)
         QPointer<KAboutPluginDialog> aboutDialog = new KAboutPluginDialog(m_partView->kPart()->metaData(), this);
-#else
-        QPointer<KAboutApplicationDialog> aboutDialog = new KAboutApplicationDialog(m_partView->kPart()->componentData(), this);
-#endif
         aboutDialog->exec();
         delete aboutDialog;
     }

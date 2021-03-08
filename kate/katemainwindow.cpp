@@ -12,20 +12,22 @@
 
 #include "kateapp.h"
 #include "katecolorschemechooser.h"
+#include "katecommandbar.h"
 #include "kateconfigdialog.h"
 #include "kateconfigplugindialogpage.h"
 #include "katedebug.h"
 #include "katedocmanager.h"
 #include "katefileactions.h"
 #include "katemwmodonhddialog.h"
+#include "kateoutputview.h"
 #include "katepluginmanager.h"
 #include "katequickopen.h"
 #include "katesavemodifieddialog.h"
 #include "katesessionmanager.h"
 #include "katesessionsaction.h"
+#include "katestashmanager.h"
 #include "kateupdatedisabler.h"
 #include "kateviewspace.h"
-#include "katecommandbar.h"
 
 #include <KAboutData>
 #include <KActionCollection>
@@ -48,15 +50,8 @@
 #include <KWindowConfig>
 #include <KWindowSystem>
 #include <KXMLGUIFactory>
-
-#include <kio_version.h>
-#if KIO_VERSION < QT_VERSION_CHECK(5, 71, 0)
-#include <KRun>
-#else
 #include <KIO/ApplicationLauncherJob>
 #include <KIO/JobUiDelegate>
-#endif
-
 #include <KFileItem>
 #include <KIO/Job>
 
@@ -156,6 +151,9 @@ KateMainWindow::KateMainWindow(KConfig *sconfig, const QString &sgroup)
         m_viewManager->restoreViewConfiguration(KConfigGroup(sconfig, sgroup));
     }
 
+    // unstash
+    // KateStashManager().popStash(m_viewManager);
+
     finishRestore();
 
     m_fileOpenRecent->loadEntries(KConfigGroup(sconfig, "Recent Files"));
@@ -171,8 +169,9 @@ KateMainWindow::KateMainWindow(KConfig *sconfig, const QString &sgroup)
     toggleShowMenuBar(false);
 
     // on first start: deactivate toolbar
-    if (firstStart)
+    if (firstStart) {
         toolBar(QStringLiteral("mainToolBar"))->hide();
+    }
 
     // in all cases: avoid that arbitrary plugin toolviews get focus, like terminal, bug 412227
     // we need to delay this a bit due to lazy view creation (and lazy e.g. terminal widget creation)
@@ -193,10 +192,6 @@ KateMainWindow::~KateMainWindow()
 
     // disable all plugin guis, delete all pluginViews
     KateApp::self()->pluginManager()->disableAllPluginsGUI(this);
-
-    // manually delete quick open, it's event filters will cause crash otherwise later
-    delete m_quickOpen;
-    m_quickOpen = nullptr;
 
     // delete the view manager, before KateMainWindow's wrapper is dead
     delete m_viewManager;
@@ -254,9 +249,28 @@ void KateMainWindow::setupImportantActions()
     connect(a, &QAction::triggered, this, &KateMainWindow::slotQuickOpen);
     a->setWhatsThis(i18n("Open a form to quick open documents."));
 
+    a = actionCollection()->addAction(QStringLiteral("view_history_back"));
+    a->setIcon(QIcon::fromTheme(QStringLiteral("arrow-left")));
+    a->setText(i18n("Jump to previous location"));
+    //    actionCollection()->setDefaultShortcut(a, QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_O));
+    connect(a, &QAction::triggered, this, &KateMainWindow::goBack);
+
+    // ensure they have the right state, start with no history
+    a->setEnabled(false);
+    connect(this, &KateMainWindow::backButtonEnabled, a, &QAction::setEnabled);
+
+    a = actionCollection()->addAction(QStringLiteral("view_history_forward"));
+    a->setIcon(QIcon::fromTheme(QStringLiteral("arrow-right")));
+    a->setText(i18n("Jump to next location"));
+    //    actionCollection()->setDefaultShortcut(a, QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_O));
+    connect(a, &QAction::triggered, this, &KateMainWindow::goForward);
+
+    // ensure they have the right state, start with no history
+    a->setEnabled(false);
+    connect(this, &KateMainWindow::forwardButtonEnabled, a, &QAction::setEnabled);
+
+    // kate command bar
     a = actionCollection()->addAction(QStringLiteral("view_commandbar_open"));
-//    a->setIcon(QIcon::fromTheme(QStringLiteral("quickopen")));
-//    a->setText(i18n("&Quick Open"));
     actionCollection()->setDefaultShortcut(a, QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_I));
     connect(a, &QAction::triggered, this, &KateMainWindow::slotCommandBarOpen);
 }
@@ -272,10 +286,6 @@ void KateMainWindow::setupMainWindow()
     centralWidget()->layout()->addWidget(m_mainStackedWidget);
     (static_cast<QBoxLayout *>(centralWidget()->layout()))->setStretchFactor(m_mainStackedWidget, 100);
 
-    m_quickOpen = new KateQuickOpen(this);
-
-    m_commandBar = new KateCommandBar(this);
-
     m_viewManager = new KateViewManager(m_mainStackedWidget, this);
     m_mainStackedWidget->addWidget(m_viewManager);
 
@@ -285,14 +295,29 @@ void KateMainWindow::setupMainWindow()
     m_bottomViewBarContainer = new QWidget(centralWidget());
     centralWidget()->layout()->addWidget(m_bottomViewBarContainer);
     m_bottomContainerStack = new KateContainerStackedLayout(m_bottomViewBarContainer);
+
+    /**
+     * create generic output tool view
+     * is used to display output of e.g. plugins
+     */
+    m_toolViewOutput = createToolView(nullptr /* toolview has no plugin it belongs to */,
+                                      QStringLiteral("output"),
+                                      KTextEditor::MainWindow::Bottom,
+                                      QIcon::fromTheme(QStringLiteral("output_win")),
+                                      i18n("Output"));
+    m_outputView = new KateOutputView(this, m_toolViewOutput);
 }
 
 void KateMainWindow::setupActions()
 {
     QAction *a;
 
-    actionCollection()->addAction(KStandardAction::New, QStringLiteral("file_new"), m_viewManager, SLOT(slotDocumentNew()))->setWhatsThis(i18n("Create a new document"));
-    actionCollection()->addAction(KStandardAction::Open, QStringLiteral("file_open"), m_viewManager, SLOT(slotDocumentOpen()))->setWhatsThis(i18n("Open an existing document for editing"));
+    actionCollection()
+        ->addAction(KStandardAction::New, QStringLiteral("file_new"), m_viewManager, SLOT(slotDocumentNew()))
+        ->setWhatsThis(i18n("Create a new document"));
+    actionCollection()
+        ->addAction(KStandardAction::Open, QStringLiteral("file_open"), m_viewManager, SLOT(slotDocumentOpen()))
+        ->setWhatsThis(i18n("Open an existing document for editing"));
 
     m_fileOpenRecent = KStandardAction::openRecent(m_viewManager, SLOT(openUrl(QUrl)), this);
     m_fileOpenRecent->setMaxItems(KateConfigDialog::recentFilesMaxCount());
@@ -358,7 +383,9 @@ void KateMainWindow::setupActions()
 
     a = actionCollection()->addAction(QStringLiteral("file_compare"));
     a->setText(i18n("Compare"));
-    connect(a, &QAction::triggered, KateApp::self()->documentManager(), [this]() { QMessageBox::information(this, i18n("Compare"), i18n("Use the Tabbar context menu to compare two documents")); });
+    connect(a, &QAction::triggered, KateApp::self()->documentManager(), [this]() {
+        QMessageBox::information(this, i18n("Compare"), i18n("Use the Tabbar context menu to compare two documents"));
+    });
     a->setWhatsThis(i18n("Shows a hint how to compare documents."));
 
     a = actionCollection()->addAction(QStringLiteral("file_close_orphaned"));
@@ -456,9 +483,14 @@ void KateMainWindow::setupActions()
 
 void KateMainWindow::slotDocumentCloseAll()
 {
-    if (!KateApp::self()->documentManager()->documentList().empty() &&
-        KMessageBox::warningContinueCancel(
-            this, i18n("This will close all open documents. Are you sure you want to continue?"), i18n("Close all documents"), KStandardGuiItem::cont(), KStandardGuiItem::cancel(), QStringLiteral("closeAll")) != KMessageBox::Cancel) {
+    if (!KateApp::self()->documentManager()->documentList().empty()
+        && KMessageBox::warningContinueCancel(this,
+                                              i18n("This will close all open documents. Are you sure you want to continue?"),
+                                              i18n("Close all documents"),
+                                              KStandardGuiItem::cont(),
+                                              KStandardGuiItem::cancel(),
+                                              QStringLiteral("closeAll"))
+            != KMessageBox::Cancel) {
         if (queryClose_internal()) {
             KateApp::self()->documentManager()->closeAllDocuments(false);
         }
@@ -467,13 +499,14 @@ void KateMainWindow::slotDocumentCloseAll()
 
 void KateMainWindow::slotDocumentCloseOther(KTextEditor::Document *document)
 {
-    if (KateApp::self()->documentManager()->documentList().size() > 1 &&
-        KMessageBox::warningContinueCancel(this,
-                                           i18n("This will close all open documents beside the current one. Are you sure you want to continue?"),
-                                           i18n("Close all documents beside current one"),
-                                           KStandardGuiItem::cont(),
-                                           KStandardGuiItem::cancel(),
-                                           QStringLiteral("closeOther")) != KMessageBox::Cancel) {
+    if (KateApp::self()->documentManager()->documentList().size() > 1
+        && KMessageBox::warningContinueCancel(this,
+                                              i18n("This will close all open documents beside the current one. Are you sure you want to continue?"),
+                                              i18n("Close all documents beside current one"),
+                                              KStandardGuiItem::cont(),
+                                              KStandardGuiItem::cancel(),
+                                              QStringLiteral("closeOther"))
+            != KMessageBox::Cancel) {
         if (queryClose_internal(document)) {
             KateApp::self()->documentManager()->closeOtherDocuments(document);
         }
@@ -507,7 +540,18 @@ bool KateMainWindow::queryClose_internal(KTextEditor::Document *doc)
 
     QList<KTextEditor::Document *> modifiedDocuments = KateApp::self()->documentManager()->modifiedDocumentList();
     modifiedDocuments.removeAll(doc);
-    bool shutdown = (modifiedDocuments.count() == 0);
+
+    // filter out what the stashManager will itself stash
+    auto m = modifiedDocuments.begin();
+    while (m != modifiedDocuments.end()) {
+        if (KateApp::self()->stashManager()->willStashDoc(*m)) {
+            m = modifiedDocuments.erase(m);
+        } else {
+            ++m;
+        }
+    }
+
+    bool shutdown = modifiedDocuments.count() == 0;
 
     if (!shutdown) {
         shutdown = KateSaveModifiedDialog::queryClose(this, modifiedDocuments);
@@ -542,6 +586,8 @@ bool KateMainWindow::queryClose()
     // and save docs if we really close down !
     if (queryClose_internal()) {
         KateApp::self()->sessionManager()->saveActiveSession(true);
+        KateApp::self()->stashManager()->stashDocuments(KateApp::self()->sessionManager()->activeSession()->config(),
+                                                        KateApp::self()->documentManager()->documentList());
         return true;
     }
 
@@ -608,6 +654,9 @@ void KateMainWindow::readOptions()
     KateApp::self()->documentManager()->setSaveMetaInfos(generalGroup.readEntry("Save Meta Infos", true));
     KateApp::self()->documentManager()->setDaysMetaInfos(generalGroup.readEntry("Days Meta Infos", 30));
 
+    KateApp::self()->stashManager()->setStashUnsavedChanges(generalGroup.readEntry("Stash unsaved file changes", false));
+    KateApp::self()->stashManager()->setStashNewUnsavedFiles(generalGroup.readEntry("Stash new unsaved files", true));
+
     m_paShowPath->setChecked(generalGroup.readEntry("Show Full Path in Title", false));
     m_paShowStatusBar->setChecked(generalGroup.readEntry("Show Status Bar", true));
     m_paShowMenuBar->setChecked(generalGroup.readEntry("Show Menu Bar", true));
@@ -670,7 +719,7 @@ void KateMainWindow::removeMenuBarActionFromContextMenu()
 
 void KateMainWindow::toggleShowStatusBar()
 {
-    emit statusBarToggled();
+    Q_EMIT statusBarToggled();
 }
 
 bool KateMainWindow::showStatusBar()
@@ -680,7 +729,7 @@ bool KateMainWindow::showStatusBar()
 
 void KateMainWindow::toggleShowTabBar()
 {
-    emit tabBarToggled();
+    Q_EMIT tabBarToggled();
 }
 
 bool KateMainWindow::showTabBar()
@@ -773,7 +822,8 @@ void KateMainWindow::slotDropEvent(QDropEvent *event)
                                                i18n("You dropped the directory %1 into Kate. "
                                                     "Do you want to load all files contained in it ?",
                                                     url.url()),
-                                               i18n("Load files recursively?")) == KMessageBox::Yes) {
+                                               i18n("Load files recursively?"))
+                    == KMessageBox::Yes) {
                     KIO::ListJob *list_job = KIO::listRecursive(url, KIO::DefaultFlags, false);
                     connect(list_job, &KIO::ListJob::entries, this, &KateMainWindow::slotListRecursiveEntries);
                 }
@@ -907,32 +957,12 @@ void KateMainWindow::mSlotFixOpenWithMenu()
 void KateMainWindow::slotOpenWithMenuAction(QAction *a)
 {
     const QList<QUrl> list({m_viewManager->activeView()->document()->url()});
-#if KIO_VERSION < QT_VERSION_CHECK(5, 71, 0)
-
-    const QString openWith = a->data().toString();
-    if (openWith.isEmpty()) {
-        // display "open with" dialog
-        KOpenWithDialog dlg(list);
-        if (dlg.exec()) {
-            KRun::runService(*dlg.service(), list, this);
-        }
-        return;
-    }
-
-    KService::Ptr app = KService::serviceByDesktopPath(openWith);
-    if (app) {
-        KRun::runService(*app, list, this);
-    } else {
-        KMessageBox::error(this, i18n("Application '%1' not found.", openWith), i18n("Application not found"));
-    }
-#else
     KService::Ptr app = KService::serviceByDesktopPath(a->data().toString());
     // If app is null, ApplicationLauncherJob will invoke the open-with dialog
     auto *job = new KIO::ApplicationLauncherJob(app);
     job->setUrls(list);
     job->setUiDelegate(new KIO::JobUiDelegate(KJobUiDelegate::AutoHandlingEnabled, this));
     job->start();
-#endif
 }
 
 void KateMainWindow::pluginHelp()
@@ -954,8 +984,9 @@ void KateMainWindow::slotFullScreen(bool t)
         b->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     } else {
         QWidget *w = mb->cornerWidget(Qt::TopRightCorner);
-        if (w)
+        if (w) {
             w->deleteLater();
+        }
     }
 }
 
@@ -983,11 +1014,12 @@ bool KateMainWindow::showModOnDiskPrompt(ModOnDiskMode mode)
 
 void KateMainWindow::slotDocumentCreated(KTextEditor::Document *doc)
 {
-    connect(doc, SIGNAL(modifiedChanged(KTextEditor::Document *)), this, SLOT(updateCaption(KTextEditor::Document *)));
-    connect(doc, SIGNAL(readWriteChanged(KTextEditor::Document *)), this, SLOT(updateCaption(KTextEditor::Document *)));
-    connect(doc, SIGNAL(documentNameChanged(KTextEditor::Document *)), this, SLOT(updateCaption(KTextEditor::Document *)));
-    connect(doc, SIGNAL(documentUrlChanged(KTextEditor::Document *)), this, SLOT(updateCaption(KTextEditor::Document *)));
-    connect(doc, &KTextEditor::Document::documentNameChanged, this, &KateMainWindow::slotUpdateOpenWith);
+    connect(doc, &KTextEditor::Document::modifiedChanged, this, QOverload<KTextEditor::Document *>::of(&KateMainWindow::updateCaption));
+    connect(doc, &KTextEditor::Document::readWriteChanged, this, QOverload<KTextEditor::Document *>::of(&KateMainWindow::updateCaption));
+    connect(doc, &KTextEditor::Document::documentNameChanged, this, QOverload<KTextEditor::Document *>::of(&KateMainWindow::updateCaption));
+    connect(doc, &KTextEditor::Document::documentUrlChanged, this, QOverload<KTextEditor::Document *>::of(&KateMainWindow::updateCaption));
+    connect(doc, &KTextEditor::Document::documentUrlChanged, this, &KateMainWindow::slotUpdateOpenWith);
+    connect(doc, &KTextEditor::Document::documentUrlChanged, this, &KateMainWindow::slotUpdateActionsNeedingUrl);
 
     updateCaption(doc);
 }
@@ -1158,7 +1190,11 @@ bool KateMainWindow::event(QEvent *e)
 {
     if (e->type() == QEvent::ShortcutOverride) {
         QKeyEvent *k = static_cast<QKeyEvent *>(e);
-        emit unhandledShortcutOverride(k);
+        Q_EMIT unhandledShortcutOverride(k);
+
+        if (k->key() == Qt::Key_Escape && k->modifiers() == Qt::NoModifier && !m_toolViewOutput->isHidden()) {
+            hideToolView(m_toolViewOutput);
+        }
     }
     return KateMDI::MainWindow::event(e);
 }
@@ -1173,6 +1209,38 @@ QObject *KateMainWindow::pluginView(const QString &name)
     return m_pluginViews.contains(plugin) ? m_pluginViews.value(plugin) : nullptr;
 }
 
+void KateMainWindow::addJump(const QUrl &url, KTextEditor::Cursor c)
+{
+    // we are in the middle of jumps somewhere?
+    if (!m_locations.isEmpty() && currentLocation + 1 < m_locations.size()) {
+        // erase all forward history
+        m_locations.erase(m_locations.begin() + currentLocation + 1, m_locations.end());
+    }
+
+    // if same line, remove last entry
+    if (!m_locations.isEmpty() && m_locations.back().url == url && m_locations.back().cursor.line() == c.line()) {
+        m_locations.pop_back();
+    }
+
+    // limit size to 100, remove first 20
+    if (m_locations.size() >= 100) {
+        m_locations.erase(m_locations.begin(), m_locations.begin() + 20);
+    }
+
+    // this is our new forward
+
+    m_locations.push_back({url, c});
+    // set to last
+    currentLocation = m_locations.size() - 1;
+    // disable forward button as we are at the end now
+    Q_EMIT forwardButtonEnabled(false);
+
+    // renable back
+    if (currentLocation > 0) {
+        Q_EMIT backButtonEnabled(true);
+    }
+}
+
 void KateMainWindow::mousePressEvent(QMouseEvent *e)
 {
     switch (e->button()) {
@@ -1183,14 +1251,6 @@ void KateMainWindow::mousePressEvent(QMouseEvent *e)
         slotFocusPrevTab();
         break;
     default:;
-    }
-}
-
-void KateMainWindow::resizeEvent(QResizeEvent *event)
-{
-    if (event && !m_quickOpen->isHidden()) {
-        m_quickOpen->updateViewGeometry();
-        event->accept();
     }
 }
 
@@ -1213,24 +1273,121 @@ void KateMainWindow::slotQuickOpen()
     /**
      * show quick open and pass focus to it
      */
-    m_quickOpen->update();
-    centralWidget()->setFocusProxy(m_quickOpen);
+    KateQuickOpen quickOpen(this);
+    centralWidget()->setFocusProxy(&quickOpen);
+    quickOpen.exec();
 }
 
 void KateMainWindow::slotCommandBarOpen()
 {
-    QList<KActionCollection*> actionCollections;
+    QList<KActionCollection *> actionCollections;
 
     auto clients = guiFactory()->clients();
-    for (auto c : clients) {
-        actionCollections.append(c->actionCollection());
+    int actionsCount = 0;
+    for (const KXMLGUIClient *c : clients) {
+        if (!c) {
+            continue;
+        }
+        if (auto collection = c->actionCollection()) {
+            actionCollections.append(collection);
+            actionsCount += collection->count();
+        }
     }
 
-    m_commandBar->updateBar(actionCollections);
-    centralWidget()->setFocusProxy(m_commandBar);
+    KateCommandBar commandBar(this);
+    commandBar.setLastUsedCmdBarActions(m_lastUsedCmdBarActions);
+    commandBar.updateBar(actionCollections, actionsCount);
+    centralWidget()->setFocusProxy(&commandBar);
+    commandBar.exec();
+    m_lastUsedCmdBarActions = commandBar.lastUsedCmdBarActions();
 }
 
-QWidget *KateMainWindow::createToolView(KTextEditor::Plugin *plugin, const QString &identifier, KTextEditor::MainWindow::ToolViewPosition pos, const QIcon &icon, const QString &text)
+void KateMainWindow::goBack()
+{
+    if (m_locations.isEmpty() || currentLocation == 0) {
+        return;
+    }
+
+    const auto &location = m_locations.at(currentLocation - 1);
+    currentLocation--;
+
+    if (currentLocation <= 0) {
+        Q_EMIT backButtonEnabled(false);
+    }
+
+    if (!location.url.isValid() || !location.cursor.isValid()) {
+        QVariantMap genericMessage;
+        genericMessage.insert(QStringLiteral("type"), QStringLiteral("Error"));
+        genericMessage.insert(QStringLiteral("category"), i18n("Git"));
+        genericMessage.insert(QStringLiteral("text"),
+                              i18n("Failed to jump to: %1 %2 %3", location.url.toDisplayString(), location.cursor.line(), location.cursor.column()));
+        m_outputView->slotMessage(genericMessage);
+
+        m_locations.remove(currentLocation);
+        return;
+    }
+
+    if (activeView() && activeView()->document() && activeView()->document()->url() == location.url) {
+        const QSignalBlocker blocker(activeView());
+        activeView()->setCursorPosition(location.cursor);
+        // enable forward
+        Q_EMIT forwardButtonEnabled(true);
+        return;
+    }
+
+    auto v = openUrl(location.url);
+    const QSignalBlocker blocker(v);
+    v->setCursorPosition(location.cursor);
+    // enable forward
+    Q_EMIT forwardButtonEnabled(true);
+}
+
+void KateMainWindow::goForward()
+{
+    if (m_locations.isEmpty()) {
+        return;
+    }
+    if (currentLocation == m_locations.size() - 1) {
+        return;
+    }
+
+    const auto &location = m_locations.at(currentLocation + 1);
+    currentLocation++;
+
+    if (currentLocation + 1 >= m_locations.size()) {
+        Q_EMIT forwardButtonEnabled(false);
+    }
+
+    Q_EMIT backButtonEnabled(true);
+
+    if (!location.url.isValid() || !location.cursor.isValid()) {
+        QVariantMap genericMessage;
+        genericMessage.insert(QStringLiteral("type"), QStringLiteral("Error"));
+        genericMessage.insert(QStringLiteral("category"), i18n("Git"));
+        genericMessage.insert(QStringLiteral("text"),
+                              i18n("Failed to jump to: %1 %2 %3", location.url.toDisplayString(), location.cursor.line(), location.cursor.column()));
+        m_outputView->slotMessage(genericMessage);
+
+        m_locations.remove(currentLocation);
+        return;
+    }
+
+    if (activeView() && activeView()->document() && activeView()->document()->url() == location.url) {
+        const QSignalBlocker blocker(activeView());
+        activeView()->setCursorPosition(location.cursor);
+        return;
+    }
+
+    auto v = openUrl(location.url);
+    const QSignalBlocker blocker(v);
+    v->setCursorPosition(location.cursor);
+}
+
+QWidget *KateMainWindow::createToolView(KTextEditor::Plugin *plugin,
+                                        const QString &identifier,
+                                        KTextEditor::MainWindow::ToolViewPosition pos,
+                                        const QIcon &icon,
+                                        const QString &text)
 {
     return KateMDI::MainWindow::createToolView(plugin, identifier, static_cast<KMultiTabBar::KMultiTabBarPosition>(pos), icon, text);
 }

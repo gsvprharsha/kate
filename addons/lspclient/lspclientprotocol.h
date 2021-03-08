@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
 
     SPDX-License-Identifier: MIT
@@ -15,6 +14,8 @@
 #include <QString>
 #include <QUrl>
 #include <QVector>
+
+#include "lspsemantichighlighting.h"
 
 #include <KTextEditor/Cursor>
 #include <KTextEditor/Range>
@@ -42,7 +43,7 @@ enum class LSPErrorCode {
 };
 
 struct LSPResponseError {
-    LSPErrorCode code {};
+    LSPErrorCode code{};
     QString message;
     QJsonValue data;
 };
@@ -66,7 +67,7 @@ struct LSPDocumentOnTypeFormattingOptions : public LSPSignatureHelpOptions {
 
 struct LSPSemanticHighlightingOptions {
     // cf. https://manual.macromates.com/en/language_grammars
-    QVector<QVector<QString>> scopes;
+    SemanticHighlighting scopes;
 };
 
 struct LSPServerCapabilities {

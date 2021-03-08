@@ -12,7 +12,7 @@
 #include "kateprojectitem.h"
 #include <KTextEditor/ModificationInterface>
 #include <QDateTime>
-#include <QMap>
+#include <QHash>
 #include <QSharedPointer>
 #include <QTextDocument>
 
@@ -23,18 +23,14 @@
 typedef QSharedPointer<QStandardItem> KateProjectSharedQStandardItem;
 Q_DECLARE_METATYPE(KateProjectSharedQStandardItem)
 
-typedef QSharedPointer<QMap<QString, KateProjectItem *>> KateProjectSharedQMapStringItem;
-Q_DECLARE_METATYPE(KateProjectSharedQMapStringItem)
+typedef QSharedPointer<QHash<QString, KateProjectItem *>> KateProjectSharedQHashStringItem;
+Q_DECLARE_METATYPE(KateProjectSharedQHashStringItem)
 
 typedef QSharedPointer<KateProjectIndex> KateProjectSharedProjectIndex;
 Q_DECLARE_METATYPE(KateProjectSharedProjectIndex)
 
-namespace ThreadWeaver
-{
-class Queue;
-}
-
 class KateProjectPlugin;
+class QThreadPool;
 
 /**
  * Class representing a project.
@@ -48,7 +44,7 @@ public:
     /**
      * construct empty project
      */
-    KateProject(ThreadWeaver::Queue *weaver, KateProjectPlugin *plugin);
+    KateProject(QThreadPool &threadPool, KateProjectPlugin *plugin);
 
     /**
      * deconstruct project
@@ -157,6 +153,11 @@ public:
         return m_projectIndex.data();
     }
 
+    KateProjectPlugin *plugin()
+    {
+        return m_plugin;
+    }
+
     /**
      * Computes a suitable file name for the given suffix.
      * If you e.g. want to store a "notes" file, you could pass "notes" and get
@@ -198,7 +199,7 @@ private Q_SLOTS:
      * @param topLevel new toplevel element for model
      * @param file2Item new file => item mapping
      */
-    void loadProjectDone(const KateProjectSharedQStandardItem &topLevel, KateProjectSharedQMapStringItem file2Item);
+    void loadProjectDone(const KateProjectSharedQStandardItem &topLevel, KateProjectSharedQHashStringItem file2Item);
 
     /**
      * Used for worker to send back the results of index loading
@@ -233,6 +234,12 @@ private:
     void registerUntrackedDocument(KTextEditor::Document *document);
     void unregisterUntrackedItem(const KateProjectItem *item);
     QVariantMap readProjectFile() const;
+    /**
+     * Read a JSON document from file.
+     *
+     * In case of an error, the returned object verifies isNull() is true.
+     */
+    static QJsonDocument readJSONFile(const QString &fileName);
 
 private:
     /**
@@ -268,7 +275,7 @@ private:
     /**
      * mapping files => items
      */
-    KateProjectSharedQMapStringItem m_file2Item;
+    KateProjectSharedQHashStringItem m_file2Item;
 
     /**
      * project index, if any
@@ -283,14 +290,17 @@ private:
     /**
      * Set of existing documents for this project.
      */
-    QMap<KTextEditor::Document *, QString> m_documents;
+    QHash<KTextEditor::Document *, QString> m_documents;
 
     /**
      * Parent item for existing documents that are not in the project tree
      */
     QStandardItem *m_untrackedDocumentsRoot;
 
-    ThreadWeaver::Queue *m_weaver;
+    /**
+     * thread pool used for project worker
+     */
+    QThreadPool &m_threadPool;
 
     /**
      * project configuration (read from file or injected)

@@ -71,7 +71,9 @@ KWrite::KWrite(KTextEditor::Document *doc, KWriteApplication *app)
     connect(m_view->document(), &KTextEditor::Document::documentUrlChanged, this, &KWrite::urlChanged);
 
     setAcceptDrops(true);
-    connect(m_view, SIGNAL(dropEventPass(QDropEvent *)), this, SLOT(slotDropEvent(QDropEvent *)));
+    // clang-format off
+    connect(m_view, SIGNAL(dropEventPass(QDropEvent*)), this, SLOT(slotDropEvent(QDropEvent*)));
+    // clang-format on
 
     setXMLFile(QStringLiteral("kwriteui.rc"));
     createShellGUI(true);
@@ -130,10 +132,14 @@ void KWrite::setupActions()
     m_closeAction->setDisabled(true);
 
     // setup File menu
-    actionCollection()->addAction(KStandardAction::New, QStringLiteral("file_new"), this, SLOT(slotNew()))->setWhatsThis(i18n("Use this command to create a new document"));
-    actionCollection()->addAction(KStandardAction::Open, QStringLiteral("file_open"), this, SLOT(slotOpen()))->setWhatsThis(i18n("Use this command to open an existing document for editing"));
+    actionCollection()
+        ->addAction(KStandardAction::New, QStringLiteral("file_new"), this, SLOT(slotNew()))
+        ->setWhatsThis(i18n("Use this command to create a new document"));
+    actionCollection()
+        ->addAction(KStandardAction::Open, QStringLiteral("file_open"), this, SLOT(slotOpen()))
+        ->setWhatsThis(i18n("Use this command to open an existing document for editing"));
 
-    m_recentFiles = KStandardAction::openRecent(this, SLOT(slotOpen(QUrl)), this);
+    m_recentFiles = KStandardAction::openRecent(this, QOverload<const QUrl &>::of(&KWrite::slotOpen), this);
     actionCollection()->addAction(m_recentFiles->objectName(), m_recentFiles);
     m_recentFiles->setWhatsThis(i18n("This lists files which you have opened recently, and allows you to easily open them again."));
 
@@ -148,9 +154,9 @@ void KWrite::setupActions()
     // setup Settings menu
     setStandardToolBarMenuEnabled(true);
 
-    m_paShowMenuBar = KStandardAction::showMenubar(this, SLOT(toggleMenuBar()), actionCollection());
+    m_paShowMenuBar = KStandardAction::showMenubar(this, &KWrite::toggleMenuBar, actionCollection());
 
-    m_paShowStatusBar = KStandardAction::showStatusbar(this, SLOT(toggleStatusBar()), this);
+    m_paShowStatusBar = KStandardAction::showStatusbar(this, &KWrite::toggleStatusBar, this);
     actionCollection()->addAction(m_paShowStatusBar->objectName(), m_paShowStatusBar);
     m_paShowStatusBar->setWhatsThis(i18n("Use this command to show or hide the view's statusbar"));
 
@@ -333,8 +339,9 @@ void KWrite::slotDropEvent(QDropEvent *event)
 {
     const QList<QUrl> textlist = event->mimeData()->urls();
 
-    for (const QUrl &url : textlist)
+    for (const QUrl &url : textlist) {
         slotOpen(url);
+    }
 }
 
 void KWrite::slotEnableActions(bool enable)

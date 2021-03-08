@@ -130,7 +130,9 @@ void CloseExceptPluginView::appendActionsFrom(const std::set<QUrl> &paths, actio
         QString action = path.path() + QLatin1Char('*');
         actions[action] = QPointer<QAction>(new QAction(action, menu));
         menu->addAction(actions[action]);
-        connect(actions[action].data(), &QAction::triggered, this, [this, closeFunction, action]() { (this->*closeFunction)(action); });
+        connect(actions[action].data(), &QAction::triggered, this, [this, closeFunction, action]() {
+            (this->*closeFunction)(action);
+        });
     }
 }
 
@@ -140,11 +142,17 @@ void CloseExceptPluginView::appendActionsFrom(const std::set<QString> &masks, ac
         QString action = mask.startsWith(QLatin1Char('*')) ? mask : mask + QLatin1Char('*');
         actions[action] = QPointer<QAction>(new QAction(action, menu));
         menu->addAction(actions[action]);
-        connect(actions[action].data(), &QAction::triggered, this, [this, closeFunction, action]() { (this->*closeFunction)(action); });
+        connect(actions[action].data(), &QAction::triggered, this, [this, closeFunction, action]() {
+            (this->*closeFunction)(action);
+        });
     }
 }
 
-void CloseExceptPluginView::updateMenu(const std::set<QUrl> &paths, const std::set<QString> &masks, actions_map_type &actions, KActionMenu *menu, CloseFunction closeFunction)
+void CloseExceptPluginView::updateMenu(const std::set<QUrl> &paths,
+                                       const std::set<QString> &masks,
+                                       actions_map_type &actions,
+                                       KActionMenu *menu,
+                                       CloseFunction closeFunction)
 {
     // turn menu ON or OFF depending on collected results
     menu->setEnabled(!paths.empty());
@@ -157,8 +165,9 @@ void CloseExceptPluginView::updateMenu(const std::set<QUrl> &paths, const std::s
     // Form a new one
     appendActionsFrom(paths, actions, menu, closeFunction);
     if (!masks.empty()) {
-        if (!paths.empty())
+        if (!paths.empty()) {
             menu->addSeparator(); // Add separator between paths and file's ext filters
+        }
         appendActionsFrom(masks, actions, menu, closeFunction);
     }
     // Append 'Show Confirmation' toggle menu item
@@ -184,8 +193,9 @@ void CloseExceptPluginView::updateMenu()
         paths_set_type_masks masks;
         for (KTextEditor::Document *document : docs) {
             const QString &ext = QFileInfo(document->url().path()).completeSuffix();
-            if (!ext.isEmpty())
+            if (!ext.isEmpty()) {
                 masks.insert(QStringLiteral("*.") + ext);
+            }
             doc_paths.insert(KIO::upUrl(document->url()));
         }
         paths_set_type paths = doc_paths;
@@ -194,9 +204,11 @@ void CloseExceptPluginView::updateMenu()
         for (paths_set_type::iterator it = doc_paths.begin(), last = doc_paths.end(); it != last; ++it) {
             for (QUrl url = *it; (!url.path().isEmpty()) && url.path() != QLatin1String("/"); url = KIO::upUrl(url)) {
                 paths_set_type::iterator not_it = it;
-                for (++not_it; not_it != last; ++not_it)
-                    if (!not_it->path().startsWith(url.path()))
+                for (++not_it; not_it != last; ++not_it) {
+                    if (!not_it->path().startsWith(url.path())) {
                         break;
+                    }
+                }
                 if (not_it == last) {
                     paths.insert(url);
                     break;
@@ -236,7 +248,8 @@ void CloseExceptPluginView::close(const QString &item, const bool close_if_match
         return;
     }
     // Show confirmation dialog if needed
-    const bool removeNeeded = !m_plugin->showConfirmationNeeded() || CloseConfirmDialog(docs2close, m_show_confirmation_action, qobject_cast<QWidget *>(this)).exec();
+    const bool removeNeeded =
+        !m_plugin->showConfirmationNeeded() || CloseConfirmDialog(docs2close, m_show_confirmation_action, qobject_cast<QWidget *>(this)).exec();
     if (removeNeeded) {
         if (docs2close.isEmpty()) {
             displayMessage(i18nc("@title:window", "Error"), i18nc("@info:tooltip", "No files to close ..."), KTextEditor::Message::Error);
@@ -252,8 +265,9 @@ void CloseExceptPluginView::close(const QString &item, const bool close_if_match
 void CloseExceptPluginView::displayMessage(const QString &title, const QString &msg, KTextEditor::Message::MessageType level)
 {
     KTextEditor::View *kv = m_mainWindow->activeView();
-    if (!kv)
+    if (!kv) {
         return;
+    }
 
     delete m_infoMessage;
     m_infoMessage = new KTextEditor::Message(xi18nc("@info", "<title>%1</title><nl/>%2", title, msg), level);

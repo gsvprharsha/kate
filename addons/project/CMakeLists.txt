@@ -4,12 +4,10 @@ find_package(
   COMPONENTS
     GuiAddons
     NewStuff
-    ThreadWeaver  
 )
 
 set_package_properties(KFGuiAddons PROPERTIES PURPOSE "Required to build the project addon")
 set_package_properties(KF5NewStuff PROPERTIES PURPOSE "Required to build the project addon")
-set_package_properties(KF5ThreadWeaver PROPERTIES PURPOSE "Required to build the project addon")
 
 if(NOT KF5_FOUND)
   return()
@@ -19,12 +17,11 @@ add_library(kateprojectplugin MODULE "")
 target_compile_definitions(kateprojectplugin PRIVATE TRANSLATION_DOMAIN="kateproject")
 
 target_link_libraries(
-  kateprojectplugin 
+  kateprojectplugin
   PRIVATE
     KF5::GuiAddons
     KF5::NewStuff
     KF5::TextEditor
-    KF5::ThreadWeaver
 )
 
 target_include_directories(
@@ -41,7 +38,7 @@ if(HAVE_CTERMID)
 endif()
 
 target_sources(
-  kateprojectplugin 
+  kateprojectplugin
   PRIVATE
     fileutil.cpp
     kateprojectplugin.cpp
@@ -61,16 +58,31 @@ target_sources(
     kateprojectinfoviewnotes.cpp
     kateprojectconfigpage.cpp
     kateprojectcodeanalysistool.cpp
+    branchesdialog.cpp
+    branchesdialogmodel.cpp
+    gitwidget.cpp
+    gitstatusmodel.cpp
+    gitcommitdialog.cpp
+    stashdialog.cpp
+    filehistorywidget.cpp
+    quickdialog.cpp
+    pushpulldialog.cpp
+
     tools/kateprojectcodeanalysistoolcppcheck.cpp
     tools/kateprojectcodeanalysistoolflake8.cpp
     tools/kateprojectcodeanalysistoolshellcheck.cpp
     tools/kateprojectcodeanalysisselector.cpp
+
+    git/gitdiff.cpp
+    git/gitutils.cpp
+    git/gitstatus.cpp
+
     plugin.qrc
 )
 
 kcoreaddons_desktop_to_json(kateprojectplugin kateprojectplugin.desktop)
-install(TARGETS kateprojectplugin DESTINATION ${PLUGIN_INSTALL_DIR}/ktexteditor)
-install(FILES kateproject.example DESTINATION ${DATA_INSTALL_DIR}/kateproject)
+install(TARGETS kateprojectplugin DESTINATION ${KDE_INSTALL_PLUGINDIR}/ktexteditor)
+install(FILES kateproject.example DESTINATION ${KDE_INSTALL_DATADIR}/kateproject)
 
 if(BUILD_TESTING)
   add_subdirectory(autotests)

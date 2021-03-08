@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
 
     SPDX-License-Identifier: MIT
@@ -49,12 +48,12 @@ public:
     bool m_diagnosticsHover = false;
     unsigned m_diagnosticsSize = 0;
     bool m_messages = false;
-    int m_messagesAutoSwitch = 0;
     bool m_autoHover = false;
     bool m_onTypeFormatting = false;
     bool m_incrementalSync = false;
     QUrl m_configPath;
     bool m_semanticHighlighting = false;
+    bool m_signatureHelp = true;
 
     // debug mode?
     bool m_debugMode = false;

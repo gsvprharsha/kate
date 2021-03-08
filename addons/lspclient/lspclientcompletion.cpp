@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
 
     SPDX-License-Identifier: MIT
@@ -94,6 +93,8 @@ struct LSPClientCompletionItem : public LSPCompletionItem {
     int argumentHintDepth = 0;
     QString prefix;
     QString postfix;
+    int start = 0;
+    int len = 0;
 
     LSPClientCompletionItem(const LSPCompletionItem &item)
         : LSPCompletionItem(item)
@@ -110,10 +111,13 @@ struct LSPClientCompletionItem : public LSPCompletionItem {
         documentation = sig.documentation;
         label = sig.label;
         sortText = _sortText;
+
         // transform into prefix, name, suffix if active
         if (activeParameter >= 0 && activeParameter < sig.parameters.length()) {
             const auto &param = sig.parameters.at(activeParameter);
             if (param.start >= 0 && param.start < label.length() && param.end >= 0 && param.end < label.length() && param.start < param.end) {
+                start = param.start;
+                len = param.end - param.start;
                 prefix = label.mid(0, param.start);
                 postfix = label.mid(param.end);
                 label = label.mid(param.start, param.end - param.start);
@@ -135,6 +139,7 @@ class LSPClientCompletionImpl : public LSPClientCompletion
 
     QSharedPointer<LSPClientServerManager> m_manager;
     QSharedPointer<LSPClientServer> m_server;
+    LSPClientPlugin *m_plugin;
     bool m_selectedDocumentation = false;
 
     QVector<QChar> m_triggersCompletion;
@@ -145,10 +150,11 @@ class LSPClientCompletionImpl : public LSPClientCompletion
     LSPClientServer::RequestHandle m_handle, m_handleSig;
 
 public:
-    LSPClientCompletionImpl(QSharedPointer<LSPClientServerManager> manager)
+    LSPClientCompletionImpl(QSharedPointer<LSPClientServerManager> manager, LSPClientPlugin *plugin)
         : LSPClientCompletion(nullptr)
         , m_manager(std::move(manager))
         , m_server(nullptr)
+        , m_plugin(plugin)
     {
     }
 
@@ -201,8 +207,22 @@ public:
             // probably plaintext, but let's show markdown as-is for now
             // FIXME better presentation of markdown
             return match.documentation.value;
-        } else if (role == KTextEditor::CodeCompletionModel::ItemSelected && !match.argumentHintDepth && !match.documentation.value.isEmpty() && m_selectedDocumentation) {
+        } else if (role == KTextEditor::CodeCompletionModel::ItemSelected && !match.argumentHintDepth && !match.documentation.value.isEmpty()
+                   && m_selectedDocumentation) {
             return match.documentation.value;
+        } else if (role == KTextEditor::CodeCompletionModel::CustomHighlight && match.argumentHintDepth > 0) {
+            if (index.column() != Name || match.len == 0)
+                return {};
+            QTextCharFormat boldFormat;
+            boldFormat.setFontWeight(QFont::Bold);
+            const QList<QVariant> highlighting{
+                QVariant(0),
+                QVariant(match.len),
+                boldFormat,
+            };
+            return highlighting;
+        } else if (role == CodeCompletionModel::HighlightingMethod && match.argumentHintDepth > 0) {
+            return QVariant(HighlightMethod::CustomHighlighting);
         }
 
         return QVariant();
@@ -241,8 +261,9 @@ public:
         auto handler = [this](const QList<LSPCompletionItem> & compl ) {
             beginResetModel();
             qCInfo(LSPCLIENT) << "adding completions " << compl .size();
-            for (const auto &item : compl )
+            for (const auto &item : compl ) {
                 m_matches.push_back(item);
+            }
             std::stable_sort(m_matches.begin(), m_matches.end(), compare_match);
             setRowCount(m_matches.size());
             endResetModel();
@@ -281,16 +302,33 @@ public:
             if (!m_triggerSignature) {
                 m_handle = m_server->documentCompletion(document->url(), {cursor.line(), cursor.column()}, this, handler);
             }
-            m_handleSig = m_server->signatureHelp(document->url(), {cursor.line(), cursor.column()}, this, sigHandler);
+            if (m_plugin->m_signatureHelp) {
+                m_handleSig = m_server->signatureHelp(document->url(), {cursor.line(), cursor.column()}, this, sigHandler);
+            }
         }
         setRowCount(m_matches.size());
         endResetModel();
     }
 
+    /**
+     * @brief return next char *after* the range
+     */
+    static QChar peekNextChar(KTextEditor::Document *doc, const KTextEditor::Range &range)
+    {
+        return doc->characterAt(KTextEditor::Cursor(range.end().line(), range.end().column()));
+    }
+
     void executeCompletionItem(KTextEditor::View *view, const KTextEditor::Range &word, const QModelIndex &index) const override
     {
-        if (index.row() < m_matches.size())
-            view->document()->replaceText(word, m_matches.at(index.row()).insertText);
+        if (index.row() < m_matches.size()) {
+            auto next = peekNextChar(view->document(), word);
+            auto matching = m_matches.at(index.row()).insertText;
+            // if there is already a '"' or >, remove it, this happens with #include "xx.h"
+            if ((next == QLatin1Char('"') && matching.endsWith(QLatin1Char('"'))) || (next == QLatin1Char('>') && matching.endsWith(QLatin1Char('>')))) {
+                matching.chop(1);
+            }
+            view->document()->replaceText(word, matching);
+        }
     }
 
     void aborted(KTextEditor::View *view) override
@@ -305,9 +343,9 @@ public:
     }
 };
 
-LSPClientCompletion *LSPClientCompletion::new_(QSharedPointer<LSPClientServerManager> manager)
+LSPClientCompletion *LSPClientCompletion::new_(QSharedPointer<LSPClientServerManager> manager, LSPClientPlugin *plugin)
 {
-    return new LSPClientCompletionImpl(std::move(manager));
+    return new LSPClientCompletionImpl(std::move(manager), plugin);
 }
 
 #include "lspclientcompletion.moc"

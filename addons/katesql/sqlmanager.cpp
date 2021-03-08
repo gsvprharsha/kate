@@ -45,7 +45,7 @@ void SQLManager::createConnection(const Connection &conn)
     QSqlDatabase db = QSqlDatabase::addDatabase(conn.driver, conn.name);
 
     if (!db.isValid()) {
-        emit error(db.lastError().text());
+        Q_EMIT error(db.lastError().text());
         QSqlDatabase::removeDatabase(conn.name);
         return;
     }
@@ -56,22 +56,23 @@ void SQLManager::createConnection(const Connection &conn)
     db.setDatabaseName(conn.database);
     db.setConnectOptions(conn.options);
 
-    if (conn.port > 0)
+    if (conn.port > 0) {
         db.setPort(conn.port);
+    }
 
     m_model->addConnection(conn);
 
     // try to open connection, with or without password
-    if (db.open())
+    if (db.open()) {
         m_model->setStatus(conn.name, Connection::ONLINE);
-    else {
+    } else {
         if (conn.status != Connection::REQUIRE_PASSWORD) {
             m_model->setStatus(conn.name, Connection::OFFLINE);
-            emit error(db.lastError().text());
+            Q_EMIT error(db.lastError().text());
         }
     }
 
-    emit connectionCreated(conn.name);
+    Q_EMIT connectionCreated(conn.name);
 }
 
 bool SQLManager::testConnection(const Connection &conn, QSqlError &error)
@@ -92,8 +93,9 @@ bool SQLManager::testConnection(const Connection &conn, QSqlError &error)
     db.setDatabaseName(conn.database);
     db.setConnectOptions(conn.options);
 
-    if (conn.port > 0)
+    if (conn.port > 0) {
         db.setPort(conn.port);
+    }
 
     if (!db.open()) {
         error = db.lastError();
@@ -111,7 +113,7 @@ bool SQLManager::isValidAndOpen(const QString &connection)
 
     if (!db.isValid()) {
         m_model->setStatus(connection, Connection::OFFLINE);
-        emit error(db.lastError().text());
+        Q_EMIT error(db.lastError().text());
         return false;
     }
 
@@ -122,9 +124,9 @@ bool SQLManager::isValidAndOpen(const QString &connection)
             QString password;
             int ret = readCredentials(connection, password);
 
-            if (ret != 0)
+            if (ret != 0) {
                 qDebug() << "Can't retrieve password from kwallet. returned code" << ret;
-            else {
+            } else {
                 db.setPassword(password);
                 m_model->setPassword(connection, password);
             }
@@ -132,7 +134,7 @@ bool SQLManager::isValidAndOpen(const QString &connection)
 
         if (!db.open()) {
             m_model->setStatus(connection, Connection::OFFLINE);
-            emit error(db.lastError().text());
+            Q_EMIT error(db.lastError().text());
             return false;
         }
     }
@@ -144,7 +146,7 @@ bool SQLManager::isValidAndOpen(const QString &connection)
 
 void SQLManager::reopenConnection(const QString &name)
 {
-    emit connectionAboutToBeClosed(name);
+    Q_EMIT connectionAboutToBeClosed(name);
 
     QSqlDatabase db = QSqlDatabase::database(name);
 
@@ -154,17 +156,20 @@ void SQLManager::reopenConnection(const QString &name)
 
 Wallet *SQLManager::openWallet()
 {
-    if (!m_wallet)
+    if (!m_wallet) {
         /// FIXME get kate window id...
         m_wallet = Wallet::openWallet(KWallet::Wallet::NetworkWallet(), 0);
+    }
 
-    if (!m_wallet)
+    if (!m_wallet) {
         return nullptr;
+    }
 
     QString folder(QStringLiteral("SQL Connections"));
 
-    if (!m_wallet->hasFolder(folder))
+    if (!m_wallet->hasFolder(folder)) {
         m_wallet->createFolder(folder);
+    }
 
     m_wallet->setFolder(folder);
 
@@ -175,13 +180,15 @@ Wallet *SQLManager::openWallet()
 int SQLManager::storeCredentials(const Connection &conn)
 {
     // Sqlite is without password, avoid to open wallet
-    if (conn.driver.contains(QLatin1String("QSQLITE")))
+    if (conn.driver.contains(QLatin1String("QSQLITE"))) {
         return 0;
+    }
 
     Wallet *wallet = openWallet();
 
-    if (!wallet) // user reject
+    if (!wallet) { // user reject
         return -2;
+    }
 
     QMap<QString, QString> map;
 
@@ -201,8 +208,9 @@ int SQLManager::readCredentials(const QString &name, QString &password)
 {
     Wallet *wallet = openWallet();
 
-    if (!wallet) // user reject
+    if (!wallet) { // user reject
         return -2;
+    }
 
     QMap<QString, QString> map;
 
@@ -223,13 +231,13 @@ ConnectionModel *SQLManager::connectionModel()
 
 void SQLManager::removeConnection(const QString &name)
 {
-    emit connectionAboutToBeClosed(name);
+    Q_EMIT connectionAboutToBeClosed(name);
 
     m_model->removeConnection(name);
 
     QSqlDatabase::removeDatabase(name);
 
-    emit connectionRemoved(name);
+    Q_EMIT connectionRemoved(name);
 }
 
 /// TODO: read KUrl instead of QString for sqlite paths
@@ -257,10 +265,11 @@ void SQLManager::loadConnections(KConfigGroup *connectionsGroup)
             // were stored in config file instead of kwallet
             c.password = group.readEntry("password");
 
-            if (!c.password.isEmpty())
+            if (!c.password.isEmpty()) {
                 c.status = Connection::ONLINE;
-            else
+            } else {
                 c.status = Connection::REQUIRE_PASSWORD;
+            }
         }
         createConnection(c);
     }
@@ -268,8 +277,9 @@ void SQLManager::loadConnections(KConfigGroup *connectionsGroup)
 
 void SQLManager::saveConnections(KConfigGroup *connectionsGroup)
 {
-    for (int i = 0; i < m_model->rowCount(); i++)
+    for (int i = 0; i < m_model->rowCount(); i++) {
         saveConnection(connectionsGroup, m_model->data(m_model->index(i), Qt::UserRole).value<Connection>());
+    }
 }
 
 /// TODO: write KUrl instead of QString for sqlite paths
@@ -295,11 +305,13 @@ void SQLManager::runQuery(const QString &text, const QString &connection)
     qDebug() << "connection:" << connection;
     qDebug() << "text:" << text;
 
-    if (text.isEmpty())
+    if (text.isEmpty()) {
         return;
+    }
 
-    if (!isValidAndOpen(connection))
+    if (!isValidAndOpen(connection)) {
         return;
+    }
 
     QSqlDatabase db = QSqlDatabase::database(connection);
     QSqlQuery query(db);
@@ -307,20 +319,22 @@ void SQLManager::runQuery(const QString &text, const QString &connection)
     if (!query.prepare(text)) {
         QSqlError err = query.lastError();
 
-        if (err.type() == QSqlError::ConnectionError)
+        if (err.type() == QSqlError::ConnectionError) {
             m_model->setStatus(connection, Connection::OFFLINE);
+        }
 
-        emit error(err.text());
+        Q_EMIT error(err.text());
         return;
     }
 
     if (!query.exec()) {
         QSqlError err = query.lastError();
 
-        if (err.type() == QSqlError::ConnectionError)
+        if (err.type() == QSqlError::ConnectionError) {
             m_model->setStatus(connection, Connection::OFFLINE);
+        }
 
-        emit error(err.text());
+        Q_EMIT error(err.text());
         return;
     }
 
@@ -328,9 +342,9 @@ void SQLManager::runQuery(const QString &text, const QString &connection)
 
     /// TODO: improve messages
     if (query.isSelect()) {
-        if (!query.driver()->hasFeature(QSqlDriver::QuerySize))
+        if (!query.driver()->hasFeature(QSqlDriver::QuerySize)) {
             message = i18nc("@info", "Query completed successfully");
-        else {
+        } else {
             int nRowsSelected = query.size();
             message = i18ncp("@info", "%1 record selected", "%1 records selected", nRowsSelected);
         }
@@ -339,6 +353,6 @@ void SQLManager::runQuery(const QString &text, const QString &connection)
         message = i18ncp("@info", "%1 row affected", "%1 rows affected", nRowsAffected);
     }
 
-    emit success(message);
-    emit queryActivated(query, connection);
+    Q_EMIT success(message);
+    Q_EMIT queryActivated(query, connection);
 }

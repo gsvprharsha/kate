@@ -19,6 +19,7 @@
 #include <KSharedConfig>
 #include <KStartupInfo>
 #include <KWindowSystem>
+#include <algorithm>
 
 #include <QApplication>
 #include <QByteArray>
@@ -74,9 +75,14 @@ int main(int argc, char **argv)
      * we only activate this on Windows, it seems to creates problems on unices
      * (and there the fractional scaling with the QT_... env vars as set by KScreen works)
      * see bug 416078
+     *
+     * we switched to Qt::HighDpiScaleFactorRoundingPolicy::RoundPreferFloor because of font rendering issues
+     * we follow what Krita does here, see https://invent.kde.org/graphics/krita/-/blob/master/krita/main.cc
+     * we raise the Qt requirement to  5.15 as it seems some patches went in after 5.14 that are needed
+     * see Krita comments, too
      */
-#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0) && defined(Q_OS_WIN)
-    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0) && defined(Q_OS_WIN)
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::RoundPreferFloor);
 #endif
 
     /**
@@ -114,8 +120,14 @@ int main(int argc, char **argv)
     /**
      * construct about data for Kate
      */
-    KAboutData aboutData(
-        QStringLiteral("kate"), i18n("Kate"), QStringLiteral(KATE_VERSION), i18n("Kate - Advanced Text Editor"), KAboutLicense::LGPL_V2, i18n("(c) 2000-2021 The Kate Authors"), QString(), QStringLiteral("https://kate-editor.org"));
+    KAboutData aboutData(QStringLiteral("kate"),
+                         i18n("Kate"),
+                         QStringLiteral(KATE_VERSION),
+                         i18n("Kate - Advanced Text Editor"),
+                         KAboutLicense::LGPL_V2,
+                         i18n("(c) 2000-2021 The Kate Authors"),
+                         QString(),
+                         QStringLiteral("https://kate-editor.org"));
 
     /**
      * right dbus prefix == org.kde.
@@ -135,7 +147,10 @@ int main(int argc, char **argv)
     aboutData.addAuthor(i18n("Sven Brauch"), i18n("Developer"), QStringLiteral("mail@svenbrauch.de"));
     aboutData.addAuthor(i18n("Kåre Särs"), i18n("Developer"), QStringLiteral("kare.sars@iki.fi"));
     aboutData.addAuthor(i18n("Anders Lund"), i18n("Core Developer"), QStringLiteral("anders@alweb.dk"), QStringLiteral("https://www.alweb.dk"));
-    aboutData.addAuthor(i18n("Joseph Wenninger"), i18n("Core Developer"), QStringLiteral("jowenn@kde.org"), QStringLiteral("http://stud3.tuwien.ac.at/~e9925371"));
+    aboutData.addAuthor(i18n("Joseph Wenninger"),
+                        i18n("Core Developer"),
+                        QStringLiteral("jowenn@kde.org"),
+                        QStringLiteral("http://stud3.tuwien.ac.at/~e9925371"));
     aboutData.addAuthor(i18n("Hamish Rodda"), i18n("Core Developer"), QStringLiteral("rodda@kde.org"));
     aboutData.addAuthor(i18n("Alexander Neundorf"), i18n("Developer"), QStringLiteral("neundorf@kde.org"));
     aboutData.addAuthor(i18n("Waldo Bastian"), i18n("The cool buffersystem"), QStringLiteral("bastian@kde.org"));
@@ -150,8 +165,14 @@ int main(int argc, char **argv)
     aboutData.addAuthor(i18n("Glen Parker"), i18n("KWrite Undo History, Kspell integration"), QStringLiteral("glenebob@nwlink.com"));
     aboutData.addAuthor(i18n("Scott Manson"), i18n("KWrite XML Syntax highlighting support"), QStringLiteral("sdmanson@alltel.net"));
     aboutData.addAuthor(i18n("John Firebaugh"), i18n("Patches and more"), QStringLiteral("jfirebaugh@kde.org"));
-    aboutData.addAuthor(i18n("Pablo Martín"), i18n("Python Plugin Developer"), QStringLiteral("goinnn@gmail.com"), QStringLiteral("https://github.com/goinnn/"));
-    aboutData.addAuthor(i18n("Gerald Senarclens de Grancy"), i18n("QA and Scripting"), QStringLiteral("oss@senarclens.eu"), QStringLiteral("http://find-santa.eu/"));
+    aboutData.addAuthor(i18n("Pablo Martín"),
+                        i18n("Python Plugin Developer"),
+                        QStringLiteral("goinnn@gmail.com"),
+                        QStringLiteral("https://github.com/goinnn/"));
+    aboutData.addAuthor(i18n("Gerald Senarclens de Grancy"),
+                        i18n("QA and Scripting"),
+                        QStringLiteral("oss@senarclens.eu"),
+                        QStringLiteral("http://find-santa.eu/"));
 
     aboutData.addCredit(i18n("Matteo Merli"), i18n("Highlighting for RPM Spec-Files, Perl, Diff and more"), QStringLiteral("merlim@libero.it"));
     aboutData.addCredit(i18n("Rocky Scaletta"), i18n("Highlighting for VHDL"), QStringLiteral("rocky@purdue.edu"));
@@ -189,30 +210,38 @@ int main(int argc, char **argv)
     aboutData.setupCommandLine(&parser);
 
     // -s/--start session option
-    const QCommandLineOption startSessionOption(QStringList() << QStringLiteral("s") << QStringLiteral("start"), i18n("Start Kate with a given session."), i18n("session"));
+    const QCommandLineOption startSessionOption(QStringList() << QStringLiteral("s") << QStringLiteral("start"),
+                                                i18n("Start Kate with a given session."),
+                                                i18n("session"));
     parser.addOption(startSessionOption);
 
     // --startanon session option
-    const QCommandLineOption startAnonymousSessionOption(QStringList() << QStringLiteral("startanon"), i18n("Start Kate with a new anonymous session, implies '-n'."));
+    const QCommandLineOption startAnonymousSessionOption(QStringList() << QStringLiteral("startanon"),
+                                                         i18n("Start Kate with a new anonymous session, implies '-n'."));
     parser.addOption(startAnonymousSessionOption);
 
     // -n/--new option
-    const QCommandLineOption startNewInstanceOption(
-        QStringList() << QStringLiteral("n") << QStringLiteral("new"),
-        i18n("Force start of a new kate instance (is ignored if start is used and another kate instance already has the given session opened), forced if no parameters and no URLs are given at all."));
+    const QCommandLineOption startNewInstanceOption(QStringList() << QStringLiteral("n") << QStringLiteral("new"),
+                                                    i18n("Force start of a new kate instance (is ignored if start is used and another kate instance already "
+                                                         "has the given session opened), forced if no parameters and no URLs are given at all."));
     parser.addOption(startNewInstanceOption);
 
     // -b/--block option
-    const QCommandLineOption startBlockingOption(QStringList() << QStringLiteral("b") << QStringLiteral("block"), i18n("If using an already running kate instance, block until it exits, if URLs given to open."));
+    const QCommandLineOption startBlockingOption(QStringList() << QStringLiteral("b") << QStringLiteral("block"),
+                                                 i18n("If using an already running kate instance, block until it exits, if URLs given to open."));
     parser.addOption(startBlockingOption);
 
     // -p/--pid option
     const QCommandLineOption usePidOption(
-        QStringList() << QStringLiteral("p") << QStringLiteral("pid"), i18n("Only try to reuse kate instance with this pid (is ignored if start is used and another kate instance already has the given session opened)."), i18n("pid"));
+        QStringList() << QStringLiteral("p") << QStringLiteral("pid"),
+        i18n("Only try to reuse kate instance with this pid (is ignored if start is used and another kate instance already has the given session opened)."),
+        i18n("pid"));
     parser.addOption(usePidOption);
 
     // -e/--encoding option
-    const QCommandLineOption useEncodingOption(QStringList() << QStringLiteral("e") << QStringLiteral("encoding"), i18n("Set encoding for the file to open."), i18n("encoding"));
+    const QCommandLineOption useEncodingOption(QStringList() << QStringLiteral("e") << QStringLiteral("encoding"),
+                                               i18n("Set encoding for the file to open."),
+                                               i18n("encoding"));
     parser.addOption(useEncodingOption);
 
     // -l/--line option
@@ -220,7 +249,9 @@ int main(int argc, char **argv)
     parser.addOption(gotoLineOption);
 
     // -c/--column option
-    const QCommandLineOption gotoColumnOption(QStringList() << QStringLiteral("c") << QStringLiteral("column"), i18n("Navigate to this column."), i18n("column"));
+    const QCommandLineOption gotoColumnOption(QStringList() << QStringLiteral("c") << QStringLiteral("column"),
+                                              i18n("Navigate to this column."),
+                                              i18n("column"));
     parser.addOption(gotoColumnOption);
 
     // -i/--stdin option
@@ -228,7 +259,8 @@ int main(int argc, char **argv)
     parser.addOption(readStdInOption);
 
     // --tempfile option
-    const QCommandLineOption tempfileOption(QStringList() << QStringLiteral("tempfile"), i18n("The files/URLs opened by the application will be deleted after use"));
+    const QCommandLineOption tempfileOption(QStringList() << QStringLiteral("tempfile"),
+                                            i18n("The files/URLs opened by the application will be deleted after use"));
     parser.addOption(tempfileOption);
 
     // urls to open
@@ -257,10 +289,14 @@ int main(int argc, char **argv)
      */
     bool force_new = parser.isSet(startNewInstanceOption);
     if (!force_new) {
-        if (!(parser.isSet(startSessionOption) || parser.isSet(startNewInstanceOption) || parser.isSet(usePidOption) || parser.isSet(useEncodingOption) || parser.isSet(gotoLineOption) || parser.isSet(gotoColumnOption) ||
-              parser.isSet(readStdInOption)) &&
-            (urls.isEmpty())) {
+        if (!(parser.isSet(startSessionOption) || parser.isSet(startNewInstanceOption) || parser.isSet(usePidOption) || parser.isSet(useEncodingOption)
+              || parser.isSet(gotoLineOption) || parser.isSet(gotoColumnOption) || parser.isSet(readStdInOption))
+            && (urls.isEmpty())) {
             force_new = true;
+        } else {
+            force_new = std::any_of(urls.begin(), urls.end(), [](const QString &url) {
+                return QFileInfo(url).isDir();
+            });
         }
     }
 
@@ -284,7 +320,10 @@ int main(int argc, char **argv)
         }
 
         QString currentActivity;
-        QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.kde.ActivityManager"), QStringLiteral("/ActivityManager/Activities"), QStringLiteral("org.kde.ActivityManager.Activities"), QStringLiteral("CurrentActivity"));
+        QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.kde.ActivityManager"),
+                                                        QStringLiteral("/ActivityManager/Activities"),
+                                                        QStringLiteral("org.kde.ActivityManager.Activities"),
+                                                        QStringLiteral("CurrentActivity"));
         QDBusMessage res = QDBusConnection::sessionBus().call(m);
         QList<QVariant> answer = res.arguments();
         if (answer.size() == 1) {
@@ -296,7 +335,10 @@ int main(int argc, char **argv)
             QString serviceName = (*it)->serviceName;
 
             if (currentActivity.length() != 0) {
-                QDBusMessage m = QDBusMessage::createMethodCall(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("isOnActivity"));
+                QDBusMessage m = QDBusMessage::createMethodCall(serviceName,
+                                                                QStringLiteral("/MainApplication"),
+                                                                QStringLiteral("org.kde.Kate.Application"),
+                                                                QStringLiteral("isOnActivity"));
 
                 QList<QVariant> dbargs;
 
@@ -366,7 +408,10 @@ int main(int argc, char **argv)
 
                     if (there.isValid() && there.value()) {
                         // query instance current desktop
-                        QDBusMessage m = QDBusMessage::createMethodCall(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("desktopNumber"));
+                        QDBusMessage m = QDBusMessage::createMethodCall(serviceName,
+                                                                        QStringLiteral("/MainApplication"),
+                                                                        QStringLiteral("org.kde.Kate.Application"),
+                                                                        QStringLiteral("desktopNumber"));
 
                         QDBusMessage res = QDBusConnection::sessionBus().call(m);
                         QList<QVariant> answer = res.arguments();
@@ -395,7 +440,10 @@ int main(int argc, char **argv)
         if (foundRunningService) {
             // open given session
             if (parser.isSet(startSessionOption) && (!session_already_opened)) {
-                QDBusMessage m = QDBusMessage::createMethodCall(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("activateSession"));
+                QDBusMessage m = QDBusMessage::createMethodCall(serviceName,
+                                                                QStringLiteral("/MainApplication"),
+                                                                QStringLiteral("org.kde.Kate.Application"),
+                                                                QStringLiteral("activateSession"));
 
                 QList<QVariant> dbusargs;
                 dbusargs.append(parser.value(startSessionOption));
@@ -414,7 +462,10 @@ int main(int argc, char **argv)
             // Bug 397913: Reverse the order here so the new tabs are opened in same order as the files were passed in on the command line
             for (int i = urls.size() - 1; i >= 0; --i) {
                 const QString &url = urls[i];
-                QDBusMessage m = QDBusMessage::createMethodCall(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("tokenOpenUrlAt"));
+                QDBusMessage m = QDBusMessage::createMethodCall(serviceName,
+                                                                QStringLiteral("/MainApplication"),
+                                                                QStringLiteral("org.kde.Kate.Application"),
+                                                                QStringLiteral("tokenOpenUrlAt"));
 
                 UrlInfo info(url);
                 QList<QVariant> dbusargs;
@@ -459,7 +510,10 @@ int main(int argc, char **argv)
                     text.append(line + QLatin1Char('\n'));
                 } while (!line.isNull());
 
-                QDBusMessage m = QDBusMessage::createMethodCall(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("openInput"));
+                QDBusMessage m = QDBusMessage::createMethodCall(serviceName,
+                                                                QStringLiteral("/MainApplication"),
+                                                                QStringLiteral("org.kde.Kate.Application"),
+                                                                QStringLiteral("openInput"));
 
                 QList<QVariant> dbusargs;
                 dbusargs.append(text);
@@ -484,7 +538,10 @@ int main(int argc, char **argv)
             }
 
             if (nav) {
-                QDBusMessage m = QDBusMessage::createMethodCall(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("setCursor"));
+                QDBusMessage m = QDBusMessage::createMethodCall(serviceName,
+                                                                QStringLiteral("/MainApplication"),
+                                                                QStringLiteral("org.kde.Kate.Application"),
+                                                                QStringLiteral("setCursor"));
 
                 QList<QVariant> args;
                 args.append(line);
@@ -495,14 +552,27 @@ int main(int argc, char **argv)
             }
 
             // activate the used instance
-            QDBusMessage activateMsg = QDBusMessage::createMethodCall(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("activate"));
+            QDBusMessage activateMsg = QDBusMessage::createMethodCall(serviceName,
+                                                                      QStringLiteral("/MainApplication"),
+                                                                      QStringLiteral("org.kde.Kate.Application"),
+                                                                      QStringLiteral("activate"));
             QDBusConnection::sessionBus().call(activateMsg);
 
             // connect dbus signal
             if (needToBlock) {
                 KateWaiter *waiter = new KateWaiter(serviceName, tokens);
-                QDBusConnection::sessionBus().connect(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("exiting"), waiter, SLOT(exiting()));
-                QDBusConnection::sessionBus().connect(serviceName, QStringLiteral("/MainApplication"), QStringLiteral("org.kde.Kate.Application"), QStringLiteral("documentClosed"), waiter, SLOT(documentClosed(QString)));
+                QDBusConnection::sessionBus().connect(serviceName,
+                                                      QStringLiteral("/MainApplication"),
+                                                      QStringLiteral("org.kde.Kate.Application"),
+                                                      QStringLiteral("exiting"),
+                                                      waiter,
+                                                      SLOT(exiting()));
+                QDBusConnection::sessionBus().connect(serviceName,
+                                                      QStringLiteral("/MainApplication"),
+                                                      QStringLiteral("org.kde.Kate.Application"),
+                                                      QStringLiteral("documentClosed"),
+                                                      waiter,
+                                                      SLOT(documentClosed(QString)));
             }
 
             // KToolInvocation (and KRun) will wait until we register on dbus
@@ -516,7 +586,13 @@ int main(int argc, char **argv)
             // if we block
             if (needToBlock) {
                 QObject::connect(
-                    qApp, &QGuiApplication::saveStateRequest, qApp, [](QSessionManager &session) { session.setRestartHint(QSessionManager::RestartNever); }, Qt::DirectConnection);
+                    qApp,
+                    &QGuiApplication::saveStateRequest,
+                    qApp,
+                    [](QSessionManager &session) {
+                        session.setRestartHint(QSessionManager::RestartNever);
+                    },
+                    Qt::DirectConnection);
             }
 
             // this will wait until exiting is emitted by the used instance, if wanted...

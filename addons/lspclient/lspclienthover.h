@@ -1,5 +1,4 @@
-/*  SPDX-License-Identifier: MIT
-
+/*
     SPDX-FileCopyrightText: 2019 Mark Nauwelaerts <mark.nauwelaerts@gmail.com>
     SPDX-FileCopyrightText: 2019 Christoph Cullmann <cullmann@kde.org>
 
@@ -9,8 +8,8 @@
 #ifndef LSPCLIENTHOVER_H
 #define LSPCLIENTHOVER_H
 
-#include "lspclientserver.h"
-#include "lspclientservermanager.h"
+class LSPClientServerManager;
+class LSPClientServer;
 
 #include <KTextEditor/TextHintInterface>
 

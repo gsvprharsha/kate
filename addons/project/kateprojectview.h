@@ -11,8 +11,15 @@
 #include "kateproject.h"
 #include "kateprojectviewtree.h"
 
+#include <QFileSystemWatcher>
+#include <QPointer>
+
 class KLineEdit;
 class KateProjectPluginView;
+class BranchesDialog;
+class QToolButton;
+class QStackedWidget;
+class FileHistoryWidget;
 
 /**
  * Class representing a view of a project.
@@ -28,7 +35,7 @@ public:
      * @param pluginView our plugin view
      * @param project project this view is for
      */
-    KateProjectView(KateProjectPluginView *pluginView, KateProject *project);
+    KateProjectView(KateProjectPluginView *pluginView, KateProject *project, KTextEditor::MainWindow *mainWindow);
 
     /**
      * deconstruct project
@@ -62,6 +69,12 @@ private Q_SLOTS:
      */
     void filterTextChanged(const QString &filterText);
 
+    void setTreeViewAsCurrent();
+
+    void showFileGitHistory(const QString &file);
+
+    void showDiffInFixedView(const QString &file, const QByteArray &contents);
+
 private:
     /**
      * our plugin view
@@ -79,9 +92,29 @@ private:
     KateProjectViewTree *m_treeView;
 
     /**
+     * Contains treeview + file history commit list
+     */
+    QStackedWidget *m_stackWidget;
+
+    /**
      * filter
      */
     KLineEdit *m_filter;
+
+    /**
+      checkout branch button
+     */
+    QToolButton *m_branchBtn;
+
+    /**
+     * watches for changes to .git/HEAD
+     */
+    QFileSystemWatcher m_branchChangedWatcher;
+
+    /**
+     * Fixed view for view diffs
+     */
+    QPointer<KTextEditor::View> m_fixedView;
 };
 
 #endif

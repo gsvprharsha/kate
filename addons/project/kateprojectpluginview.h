@@ -20,6 +20,8 @@
 
 #include <KXMLGUIClient>
 
+#include <memory>
+
 class QAction;
 
 class KateProjectPluginView : public QObject, public KXMLGUIClient
@@ -107,6 +109,12 @@ public Q_SLOTS:
      */
     QPair<KateProjectView *, KateProjectInfoView *> viewForProject(KateProject *project);
 
+    /**
+     * Switch to project for given dir, if any there!
+     * @param dir dir with the project
+     */
+    void switchToProject(const QDir &dir);
+
 private Q_SLOTS:
     /**
      * Plugin config updated
@@ -174,6 +182,13 @@ Q_SIGNALS:
      */
     void gotoSymbol(const QString &word, int &results);
 
+    /**
+     * Signal for outgoing message, the host application will handle them!
+     * Will only be handled inside the main windows of this plugin view.
+     * @param message outgoing message we send to the host application
+     */
+    void message(const QVariantMap &message);
+
 private Q_SLOTS:
     /**
      * This slot is called whenever the active view changes in our main window.
@@ -195,6 +210,16 @@ private Q_SLOTS:
      * Show context menu
      */
     void slotContextMenuAboutToShow();
+
+    /**
+     * Handle esc key and hide the toolview
+     */
+    void handleEsc(QEvent *e);
+
+    /**
+     * Update git status on toolview shown
+     */
+    void slotUpdateStatus(bool visible);
 
 private:
     /**
@@ -224,6 +249,11 @@ private:
     QWidget *m_toolInfoView;
 
     /**
+     * our projects info toolview
+     */
+    std::unique_ptr<QWidget> m_gitToolView;
+
+    /**
      * our cross-projects toolview
      */
     QWidget *m_toolMultiView;
@@ -234,9 +264,19 @@ private:
     QComboBox *m_projectsCombo;
 
     /**
+     * combo box with all loaded projects inside
+     */
+    QComboBox *m_projectsComboGit;
+
+    /**
      * Reload button
      */
     QToolButton *m_reloadButton;
+
+    /**
+     * Git status refresh button
+     */
+    QToolButton *m_gitStatusRefreshButton;
 
     /**
      * stacked widget will all currently created project views
@@ -247,6 +287,11 @@ private:
      * stacked widget will all currently created project info views
      */
     QStackedWidget *m_stackedProjectInfoViews;
+
+    /**
+     * stacked widget will all currently created git views
+     */
+    QStackedWidget *m_stackedgitViews;
 
     /**
      * project => view

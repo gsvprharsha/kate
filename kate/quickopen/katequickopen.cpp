@@ -1,6 +1,7 @@
 /*  SPDX-License-Identifier: LGPL-2.0-or-later
 
     SPDX-FileCopyrightText: 2007, 2009 Joseph Wenninger <jowenn@kde.org>
+    SPDX-FileCopyrightText: 2021 Waqar Ahmed <waqar.17a@gmail.com>
 
     SPDX-License-Identifier: LGPL-2.0-or-later
 */
@@ -31,7 +32,6 @@
 #include <QLabel>
 #include <QPainter>
 #include <QPointer>
-#include <QPropertyAnimation>
 #include <QSortFilterProxyModel>
 #include <QStandardItemModel>
 #include <QStyledItemDelegate>
@@ -40,7 +40,7 @@
 
 #include <kfts_fuzzy_match.h>
 
-class QuickOpenFilterProxyModel : public QSortFilterProxyModel
+class QuickOpenFilterProxyModel final : public QSortFilterProxyModel
 {
 public:
     QuickOpenFilterProxyModel(QObject *parent = nullptr)
@@ -48,47 +48,45 @@ public:
     {
     }
 
-    void changeMode(FilterModes m)
-    {
-        mode = m;
-    }
-
 protected:
     bool lessThan(const QModelIndex &sourceLeft, const QModelIndex &sourceRight) const override
     {
-        int l = sourceLeft.data(KateQuickOpenModel::Score).toInt();
-        int r = sourceRight.data(KateQuickOpenModel::Score).toInt();
+        auto sm = sourceModel();
+        const int l = static_cast<KateQuickOpenModel *>(sm)->idxScore(sourceLeft);
+        const int r = static_cast<KateQuickOpenModel *>(sm)->idxScore(sourceRight);
         return l < r;
     }
 
-    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override
+    bool filterAcceptsRow(int sourceRow, const QModelIndex &) const override
     {
-        if (pattern.isEmpty())
+        if (pattern.isEmpty()) {
             return true;
-        const auto idx =  sourceModel()->index(sourceRow, 0, sourceParent);
-        const QString fileName = idx.data().toString();
-        const auto nameAndPath = fileName.splitRef(QStringLiteral("{[split]}"));
-
-        const auto &name = nameAndPath.at(0);
-        const auto &path = nameAndPath.at(1);
-        int score = 0;
-
-        bool res = false;
-        if (mode == FilterMode::FilterByName) {
-            res = filterByName(name, score);
-        } else if (mode == FilterMode::FilterByPath) {
-            res = filterByPath(path, score);
-        } else {
-            int scorep = 0, scoren = 0;
-            bool resp = filterByPath(path, scorep);
-            bool resn = filterByName(name, scoren);
-
-            // store the score for sorting later
-            score = scoren + scorep;
-            res = resp || resn;
         }
 
-        sourceModel()->setData(idx, score, KateQuickOpenModel::Score);
+        auto sm = static_cast<KateQuickOpenModel *>(sourceModel());
+        if (!sm->isValid(sourceRow)) {
+            return false;
+        }
+
+        const QString &name = sm->idxToFileName(sourceRow);
+
+        int score = 0;
+        bool res = false;
+        int scorep = 0, scoren = 0;
+        bool resn = filterByName(name, scoren);
+
+        // only match file path if filename got a match
+        bool resp = false;
+        if (resn || pathLike) {
+            const QString &path = sm->idxToFilePath(sourceRow);
+            resp = filterByPath(path, scorep);
+        }
+
+        // store the score for sorting later
+        score = scoren + scorep;
+        res = resp || resn;
+
+        sm->setScoreForIndex(sourceRow, score);
 
         return res;
     }
@@ -98,23 +96,24 @@ public Q_SLOTS:
     {
         beginResetModel();
         pattern = text;
+        pathLike = pattern.contains(QLatin1Char('/'));
         endResetModel();
     }
 
 private:
-    inline bool filterByPath(const QStringRef &path, int &score) const
+    inline bool filterByPath(const QString &path, int &score) const
     {
         return kfts::fuzzy_match(pattern, path, score);
     }
 
-    inline bool filterByName(const QStringRef &name, int &score) const
+    inline bool filterByName(const QString &name, int &score) const
     {
         return kfts::fuzzy_match(pattern, name, score);
     }
 
 private:
     QString pattern;
-    FilterModes mode;
+    bool pathLike = false;
 };
 
 class QuickOpenStyleDelegate : public QStyledItemDelegate
@@ -130,41 +129,42 @@ public:
         QStyleOptionViewItem options = option;
         initStyleOption(&options, index);
 
-        QTextDocument doc;
-
-        QString str = index.data().toString();
-
-        auto namePath = str.split(QStringLiteral("{[split]}"));
-        QString name = namePath.at(0);
-        QString path = namePath.at(1);
+        QString name = index.data(KateQuickOpenModel::FileName).toString();
+        QString path = index.data(KateQuickOpenModel::FilePath).toString();
 
         path.remove(QStringLiteral("/") + name);
 
         const QString nameColor = option.palette.color(QPalette::Link).name();
 
-        if (mode == FilterMode::FilterByName) {
-            kfts::to_fuzzy_matched_display_string(m_filterString, name, QStringLiteral("<b style=\"color:%1;\">").arg(nameColor), QStringLiteral("</b>"));
-        } else if (mode == FilterMode::FilterByPath) {
-            kfts::to_fuzzy_matched_display_string(m_filterString, path, QStringLiteral("<b>"), QStringLiteral("</b>"));
-        } else {
-            // check if there's a / separtion in filter string
-            // if there is, we use the last part to highlight the
-            // filename
-            int pos = m_filterString.lastIndexOf(QLatin1Char('/'));
-            if (pos > -1) {
-                ++pos;
-                auto pattern = m_filterString.midRef(pos);
-                kfts::to_fuzzy_matched_display_string(pattern, name, QStringLiteral("<b style=\"color:%1;\">").arg(nameColor), QStringLiteral("</b>"));
-            } else {
-                kfts::to_fuzzy_matched_display_string(m_filterString, name, QStringLiteral("<b style=\"color:%1;\">").arg(nameColor), QStringLiteral("</b>"));
-            }
-            kfts::to_fuzzy_matched_display_string(m_filterString, path, QStringLiteral("<b>"), QStringLiteral("</b>"));
-        }
+        QTextCharFormat fmt;
+        fmt.setForeground(options.palette.link().color());
+        fmt.setFontWeight(QFont::Bold);
 
-        const auto pathFontsize = option.font.pointSize();
-        doc.setHtml(QStringLiteral("<span style=\"font-size: %1pt;\">").arg(pathFontsize) + name + QStringLiteral("</span>") + QStringLiteral(" &nbsp;") +
-                    QStringLiteral("<span style=\"color:gray; font-size:%1pt;\">").arg(pathFontsize - 1) + path + QStringLiteral("</span>"));
-        doc.setDocumentMargin(2);
+        const int nameLen = name.length();
+        // space between name and path
+        constexpr int space = 1;
+        QVector<QTextLayout::FormatRange> formats;
+
+        // collect formats
+        int pos = m_filterString.lastIndexOf(QLatin1Char('/'));
+        if (pos > -1) {
+            ++pos;
+            auto pattern = m_filterString.midRef(pos);
+            auto nameFormats = kfts::get_fuzzy_match_formats(pattern, name, 0, fmt);
+            formats.append(nameFormats);
+        } else {
+            auto nameFormats = kfts::get_fuzzy_match_formats(m_filterString, name, 0, fmt);
+            formats.append(nameFormats);
+        }
+        QTextCharFormat boldFmt;
+        boldFmt.setFontWeight(QFont::Bold);
+        boldFmt.setFontPointSize(options.font.pointSize() - 1);
+        auto pathFormats = kfts::get_fuzzy_match_formats(m_filterString, name, nameLen + space, boldFmt);
+        QTextCharFormat gray;
+        gray.setForeground(Qt::gray);
+        gray.setFontPointSize(options.font.pointSize() - 1);
+        formats.append({nameLen + space, path.length(), gray});
+        formats.append(pathFormats);
 
         painter->save();
 
@@ -178,19 +178,13 @@ public:
         options.text = QString(); // clear old text
         options.widget->style()->drawControl(QStyle::CE_ItemViewItem, &options, painter, options.widget);
 
+        // space for icon
+        painter->translate(25, 0);
+
         // draw text
-        painter->translate(option.rect.x(), option.rect.y());
-        if (index.column() == 0) {
-            painter->translate(25, 0);
-        }
-        doc.drawContents(painter);
+        kfts::paintItemViewText(painter, QString(name + QStringLiteral(" ") + path), options, formats);
 
         painter->restore();
-    }
-
-    void changeMode(FilterModes m)
-    {
-        mode = m;
     }
 
 public Q_SLOTS:
@@ -201,7 +195,6 @@ public Q_SLOTS:
 
 private:
     QString m_filterString;
-    FilterModes mode;
 };
 
 Q_DECLARE_METATYPE(QPointer<KTextEditor::Document>)
@@ -226,7 +219,7 @@ KateQuickOpen::KateQuickOpen(KateMainWindow *mainWindow)
     m_listView->setTextElideMode(Qt::ElideLeft);
     m_listView->setUniformRowHeights(true);
 
-    m_base_model = new KateQuickOpenModel(m_mainWindow, this);
+    m_base_model = new KateQuickOpenModel(this);
 
     m_model = new QuickOpenFilterProxyModel(this);
     m_model->setFilterRole(Qt::DisplayRole);
@@ -245,7 +238,6 @@ KateQuickOpen::KateQuickOpen(KateMainWindow *mainWindow)
         reselectFirst(); // hacky way
     });
     connect(m_inputLine, &QuickOpenLineEdit::returnPressed, this, &KateQuickOpen::slotReturnPressed);
-    connect(m_inputLine, &QuickOpenLineEdit::filterModeChanged, this, &KateQuickOpen::slotfilterModeChanged);
     connect(m_inputLine, &QuickOpenLineEdit::listModeChanged, this, &KateQuickOpen::slotListModeChanged);
 
     connect(m_listView, &QTreeView::activated, this, &KateQuickOpen::slotReturnPressed);
@@ -263,9 +255,10 @@ KateQuickOpen::KateQuickOpen(KateMainWindow *mainWindow)
 
     setHidden(true);
 
-    // restore settings
-    slotfilterModeChanged(m_inputLine->filterMode());
     slotListModeChanged(m_inputLine->listMode());
+
+    // fill stuff
+    update(mainWindow);
 }
 
 KateQuickOpen::~KateQuickOpen()
@@ -273,7 +266,6 @@ KateQuickOpen::~KateQuickOpen()
     KSharedConfig::Ptr cfg = KSharedConfig::openConfig();
     KConfigGroup cg(cfg, "General");
 
-    cg.writeEntry("Quickopen Filter Mode", static_cast<int>(m_filterMode));
     cg.writeEntry("Quickopen List Mode", m_base_model->listMode() == KateQuickOpenModelList::CurrentProject);
 }
 
@@ -283,7 +275,8 @@ bool KateQuickOpen::eventFilter(QObject *obj, QEvent *event)
     if (event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride) {
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
         if (obj == m_inputLine) {
-            const bool forward2list = (keyEvent->key() == Qt::Key_Up) || (keyEvent->key() == Qt::Key_Down) || (keyEvent->key() == Qt::Key_PageUp) || (keyEvent->key() == Qt::Key_PageDown);
+            const bool forward2list = (keyEvent->key() == Qt::Key_Up) || (keyEvent->key() == Qt::Key_Down) || (keyEvent->key() == Qt::Key_PageUp)
+                || (keyEvent->key() == Qt::Key_PageDown);
             if (forward2list) {
                 QCoreApplication::sendEvent(m_listView, event);
                 return true;
@@ -291,14 +284,18 @@ bool KateQuickOpen::eventFilter(QObject *obj, QEvent *event)
 
             if (keyEvent->key() == Qt::Key_Escape) {
                 m_mainWindow->slotWindowActivated();
-                m_inputLine->clear();
+                {
+                    m_inputLine->blockSignals(true);
+                    m_inputLine->clear();
+                    m_inputLine->blockSignals(false);
+                }
                 keyEvent->accept();
                 hide();
                 return true;
             }
         } else {
-            const bool forward2input = (keyEvent->key() != Qt::Key_Up) && (keyEvent->key() != Qt::Key_Down) && (keyEvent->key() != Qt::Key_PageUp) && (keyEvent->key() != Qt::Key_PageDown) && (keyEvent->key() != Qt::Key_Tab) &&
-                (keyEvent->key() != Qt::Key_Backtab);
+            const bool forward2input = (keyEvent->key() != Qt::Key_Up) && (keyEvent->key() != Qt::Key_Down) && (keyEvent->key() != Qt::Key_PageUp)
+                && (keyEvent->key() != Qt::Key_PageDown) && (keyEvent->key() != Qt::Key_Tab) && (keyEvent->key() != Qt::Key_Backtab);
             if (forward2input) {
                 QCoreApplication::sendEvent(m_inputLine, event);
                 return true;
@@ -309,7 +306,11 @@ bool KateQuickOpen::eventFilter(QObject *obj, QEvent *event)
     // hide on focus out, if neither input field nor list have focus!
     else if (event->type() == QEvent::FocusOut && !(m_inputLine->hasFocus() || m_listView->hasFocus())) {
         m_mainWindow->slotWindowActivated();
-        m_inputLine->clear();
+        {
+            m_inputLine->blockSignals(true);
+            m_inputLine->clear();
+            m_inputLine->blockSignals(false);
+        }
         hide();
         return true;
     }
@@ -320,16 +321,17 @@ bool KateQuickOpen::eventFilter(QObject *obj, QEvent *event)
 void KateQuickOpen::reselectFirst()
 {
     int first = 0;
-    if (m_mainWindow->viewManager()->sortedViews().size() > 1 && m_model->rowCount() > 1)
+    if (m_mainWindow->viewManager()->sortedViews().size() > 1 && m_model->rowCount() > 1) {
         first = 1;
+    }
 
     QModelIndex index = m_model->index(first, 0);
     m_listView->setCurrentIndex(index);
 }
 
-void KateQuickOpen::update()
+void KateQuickOpen::update(KateMainWindow *mainWindow)
 {
-    m_base_model->refresh();
+    m_base_model->refresh(mainWindow);
     reselectFirst();
 
     updateViewGeometry();
@@ -344,15 +346,10 @@ void KateQuickOpen::slotReturnPressed()
     m_mainWindow->wrapper()->openUrl(url);
     hide();
     m_mainWindow->slotWindowActivated();
-    m_inputLine->clear();
-}
 
-void KateQuickOpen::slotfilterModeChanged(FilterModes mode)
-{
-    m_filterMode = mode;
-    m_model->changeMode(mode);
-    m_styleDelegate->changeMode(mode);
-    m_model->invalidate();
+    // block signals for input line so that we dont trigger filtering again
+    const QSignalBlocker blocker(m_inputLine);
+    m_inputLine->clear();
 }
 
 void KateQuickOpen::slotListModeChanged(KateQuickOpenModel::List mode)
@@ -378,13 +375,8 @@ void KateQuickOpen::updateViewGeometry()
     const int xPos = std::max(0, (centralSize.width() - viewSize.width()) / 2);
     const int yPos = std::max(0, (centralSize.height() - viewSize.height()) * 1 / 4);
 
+    // fix position and size
     const QPoint p(xPos, yPos);
     move(p + m_mainWindow->pos());
-
-    QPointer<QPropertyAnimation> animation = new QPropertyAnimation(this, "size");
-    animation->setDuration(150);
-    animation->setStartValue(this->size());
-    animation->setEndValue(viewSize);
-
-    animation->start();
+    setFixedSize(viewSize);
 }

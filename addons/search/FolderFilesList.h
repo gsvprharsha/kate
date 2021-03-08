@@ -1,26 +1,13 @@
-/*   Kate search plugin
- *
- * SPDX-FileCopyrightText: 2013 Kåre Särs <kare.sars@iki.fi>
- *
- * SPDX-License-Identifier: LGPL-2.0-or-later
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program in a file called COPYING; if not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA 02110-1301, USA.
- */
+/*
+    SPDX-FileCopyrightText: 2013 Kåre Särs <kare.sars@iki.fi>
+
+    SPDX-License-Identifier: LGPL-2.0-or-later
+*/
 
 #ifndef FolderFilesList_h
 #define FolderFilesList_h
 
-#include <QElapsedTimer>
-#include <QFileInfo>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QStringList>
 #include <QThread>
 #include <QVector>
@@ -49,7 +36,13 @@ Q_SIGNALS:
     void fileListReady();
 
 private:
-    void checkNextItem(const QFileInfo &item);
+    struct DirectoryWithResults {
+        QString directory;
+        QStringList newDirectories;
+        QStringList newFiles;
+    };
+
+    void checkNextItem(DirectoryWithResults &handleOnFolder) const;
 
 private:
     QString m_folder;
@@ -60,8 +53,7 @@ private:
     bool m_hidden = false;
     bool m_symlinks = false;
     QStringList m_types;
-    QVector<QRegExp> m_excludeList;
-    QElapsedTimer m_time;
+    QVector<QRegularExpression> m_excludes;
 };
 
 #endif

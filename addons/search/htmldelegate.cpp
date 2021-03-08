@@ -1,9 +1,8 @@
-/***************************************************************************
- *   This file is part of Kate search plugin                               *
- *   SPDX-FileCopyrightText: 2011 Kåre Särs <kare.sars@iki.fi>                           *
- *                                                                         *
- *   SPDX-License-Identifier: LGPL-2.0-or-later
- ***************************************************************************/
+/*
+    SPDX-FileCopyrightText: 2011 Kåre Särs <kare.sars@iki.fi>
+
+    SPDX-License-Identifier: LGPL-2.0-or-later
+*/
 
 #include "htmldelegate.h"
 
@@ -52,6 +51,7 @@ void SPHtmlDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option
         painter->translate(clip.topLeft() - QPoint(0, 0));
     }
     QAbstractTextDocumentLayout::PaintContext pcontext;
+    pcontext.palette.setColor(QPalette::Text, options.palette.text().color());
     doc.documentLayout()->draw(painter, pcontext);
 
     painter->restore();
@@ -60,6 +60,7 @@ void SPHtmlDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option
 QSize SPHtmlDelegate::sizeHint(const QStyleOptionViewItem & /*option*/, const QModelIndex &index) const
 {
     QTextDocument doc;
+    doc.setDefaultFont(m_font);
     doc.setDocumentMargin(s_ItemMargin);
     doc.setHtml(index.data().toString());
     // qDebug() << doc.toPlainText() << doc.size().toSize();

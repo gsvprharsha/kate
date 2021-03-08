@@ -18,7 +18,6 @@
 #include "katesessionmanager.h"
 #include "kateviewmanager.h"
 
-
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KMessageBox>
@@ -82,14 +81,24 @@ void KateConfigDialog::addBehaviorPage()
     QVBoxLayout *vbox = new QVBoxLayout;
     layout->addWidget(buttonGroup);
 
+    auto hlayout = new QHBoxLayout;
+    auto label = new QLabel(i18n("&Switch to output view upon message type:"), buttonGroup);
+    hlayout->addWidget(label);
+    m_messageTypes = new QComboBox(buttonGroup);
+    hlayout->addWidget(m_messageTypes);
+    label->setBuddy(m_messageTypes);
+    m_messageTypes->addItems({i18n("Never"), i18n("Error"), i18n("Warning"), i18n("Info"), i18n("Log")});
+    m_messageTypes->setCurrentIndex(cgGeneral.readEntry("Show output view for message type", 1));
+    connect(m_messageTypes, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &KateConfigDialog::slotChanged);
+    vbox->addLayout(hlayout);
+
     // modified files notification
-    m_modNotifications = new QCheckBox(i18n("Wa&rn about files modified by foreign processes"), buttonGroup);
+    m_modNotifications = new QCheckBox(i18n("Use a separate &dialog for handling externally modified files"), buttonGroup);
     m_modNotifications->setChecked(m_mainWindow->modNotificationEnabled());
     m_modNotifications->setWhatsThis(
-        i18n("If enabled, when Kate receives focus you will be asked what to do with "
-             "files that have been modified on the hard disk. If not enabled, you will "
-             "be asked what to do with a file that has been modified on the hard disk only "
-             "when that file is tried to be saved."));
+        i18n("If enabled, a modal dialog will be used to show all of the modified files. "
+             "If not enabled, you will be individually asked what to do for each modified file "
+             "only when that file's view receives focus."));
     connect(m_modNotifications, &QCheckBox::toggled, this, &KateConfigDialog::slotChanged);
 
     vbox->addWidget(m_modNotifications);
@@ -100,8 +109,8 @@ void KateConfigDialog::addBehaviorPage()
     buttonGroup = new QGroupBox(i18n("&Tabs"), generalFrame);
     vbox = new QVBoxLayout;
     buttonGroup->setLayout(vbox);
-    auto hlayout = new QHBoxLayout;
-    auto label = new QLabel(i18n("&Limit number of tabs:"), buttonGroup);
+    hlayout = new QHBoxLayout;
+    label = new QLabel(i18n("&Limit number of tabs:"), buttonGroup);
     hlayout->addWidget(label);
     m_tabLimit = new QSpinBox(buttonGroup);
     hlayout->addWidget(m_tabLimit);
@@ -162,7 +171,10 @@ void KateConfigDialog::addSessionPage()
     sessionConfigUi.daysMetaInfos->setSpecialValueText(i18nc("The special case of 'Delete unused meta-information after'", "(never)"));
     sessionConfigUi.daysMetaInfos->setSuffix(ki18ncp("The suffix of 'Delete unused meta-information after'", " day", " days"));
     sessionConfigUi.daysMetaInfos->setValue(KateApp::self()->documentManager()->getDaysMetaInfos());
-    connect(sessionConfigUi.daysMetaInfos, static_cast<void (KPluralHandlingSpinBox::*)(int)>(&KPluralHandlingSpinBox::valueChanged), this, &KateConfigDialog::slotChanged);
+    connect(sessionConfigUi.daysMetaInfos,
+            static_cast<void (KPluralHandlingSpinBox::*)(int)>(&KPluralHandlingSpinBox::valueChanged),
+            this,
+            &KateConfigDialog::slotChanged);
 
     // restore view  config
     sessionConfigUi.restoreVC->setChecked(cgGeneral.readEntry("Restore Window Configuration", true));
@@ -172,12 +184,13 @@ void KateConfigDialog::addSessionPage()
     connect(sessionConfigUi.spinBoxRecentFilesCount, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &KateConfigDialog::slotChanged);
 
     QString sesStart(cgGeneral.readEntry("Startup Session", "manual"));
-    if (sesStart == QLatin1String("new"))
+    if (sesStart == QLatin1String("new")) {
         sessionConfigUi.startNewSessionRadioButton->setChecked(true);
-    else if (sesStart == QLatin1String("last"))
+    } else if (sesStart == QLatin1String("last")) {
         sessionConfigUi.loadLastUserSessionRadioButton->setChecked(true);
-    else
+    } else {
         sessionConfigUi.manuallyChooseSessionRadioButton->setChecked(true);
+    }
 
     connect(sessionConfigUi.startNewSessionRadioButton, &QRadioButton::toggled, this, &KateConfigDialog::slotChanged);
     connect(sessionConfigUi.loadLastUserSessionRadioButton, &QRadioButton::toggled, this, &KateConfigDialog::slotChanged);
@@ -186,6 +199,12 @@ void KateConfigDialog::addSessionPage()
     // Closing last file closes Kate
     sessionConfigUi.modCloseAfterLast->setChecked(m_mainWindow->modCloseAfterLast());
     connect(sessionConfigUi.modCloseAfterLast, &QCheckBox::toggled, this, &KateConfigDialog::slotChanged);
+
+    // stash unsave changes
+    sessionConfigUi.stashNewUnsavedFiles->setChecked(KateApp::self()->stashManager()->stashNewUnsavedFiles());
+    sessionConfigUi.stashUnsavedFilesChanges->setChecked(KateApp::self()->stashManager()->stashUnsavedChanges());
+    connect(sessionConfigUi.stashNewUnsavedFiles, &QRadioButton::toggled, this, &KateConfigDialog::slotChanged);
+    connect(sessionConfigUi.stashUnsavedFilesChanges, &QRadioButton::toggled, this, &KateConfigDialog::slotChanged);
 }
 
 void KateConfigDialog::addPluginsPage()
@@ -328,6 +347,13 @@ void KateConfigDialog::slotApply()
         cg.writeEntry("Close After Last", sessionConfigUi.modCloseAfterLast->isChecked());
         m_mainWindow->setModCloseAfterLast(sessionConfigUi.modCloseAfterLast->isChecked());
 
+        cg.readEntry("Show output view for message type", m_messageTypes->currentIndex());
+
+        cg.writeEntry("Stash unsaved file changes", sessionConfigUi.stashUnsavedFilesChanges->isChecked());
+        KateApp::self()->stashManager()->setStashUnsavedChanges(sessionConfigUi.stashUnsavedFilesChanges->isChecked());
+        cg.writeEntry("Stash new unsaved files", sessionConfigUi.stashNewUnsavedFiles->isChecked());
+        KateApp::self()->stashManager()->setStashNewUnsavedFiles(sessionConfigUi.stashNewUnsavedFiles->isChecked());
+
         cg.writeEntry("Tabbar Tab Limit", m_tabLimit->value());
 
         cg.writeEntry("Show Tabs Close Button", m_showTabCloseButton->isChecked());
@@ -339,10 +365,11 @@ void KateConfigDialog::slotApply()
 
         // patch document modified warn state
         const QList<KTextEditor::Document *> &docs = KateApp::self()->documentManager()->documentList();
-        for (KTextEditor::Document *doc : docs)
+        for (KTextEditor::Document *doc : docs) {
             if (qobject_cast<KTextEditor::ModificationInterface *>(doc)) {
                 qobject_cast<KTextEditor::ModificationInterface *>(doc)->setModifiedOnDiskWarning(!m_modNotifications->isChecked());
             }
+        }
 
         m_mainWindow->saveOptions();
 
@@ -368,8 +395,9 @@ void KateConfigDialog::slotApply()
     }
 
     // apply ktexteditor pages
-    for (KTextEditor::ConfigPage *page : qAsConst(m_editorPages))
+    for (KTextEditor::ConfigPage *page : qAsConst(m_editorPages)) {
         page->apply();
+    }
 
     config->sync();
 
@@ -416,8 +444,12 @@ void KateConfigDialog::closeEvent(QCloseEvent *event)
         return;
     }
 
-    const auto response =
-        KMessageBox::warningYesNoCancel(this, i18n("You have unsaved changes. Do you want to apply the changes or discard them?"), i18n("Warning"), KStandardGuiItem::save(), KStandardGuiItem::discard(), KStandardGuiItem::cancel());
+    const auto response = KMessageBox::warningYesNoCancel(this,
+                                                          i18n("You have unsaved changes. Do you want to apply the changes or discard them?"),
+                                                          i18n("Warning"),
+                                                          KStandardGuiItem::save(),
+                                                          KStandardGuiItem::discard(),
+                                                          KStandardGuiItem::cancel());
     switch (response) {
     case KMessageBox::Yes:
         slotApply();

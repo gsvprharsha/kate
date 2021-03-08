@@ -39,11 +39,9 @@ typedef class QList<UDSEntry> UDSEntryList;
 class KFileItem;
 class KRecentFilesAction;
 
+class KateOutputView;
 class KateViewManager;
 class KateMwModOnHdDialog;
-class KateQuickOpen;
-enum KateQuickOpenModelList : int;
-class KateCommandBar;
 
 // Helper layout class to always provide minimum size
 class KateContainerStackedLayout : public QStackedLayout
@@ -99,7 +97,7 @@ public:
      * in the reload dialog even if not edited in this instance. */
     enum ModOnDiskMode {
         PromptEdited, ///< Do not list files that have not been edited
-        PromptAll,    ///< Include all files modified on disk
+        PromptAll, ///< Include all files modified on disk
     };
 
     /**
@@ -213,6 +211,10 @@ private Q_SLOTS:
 
     void slotListRecursiveEntries(KIO::Job *job, const KIO::UDSEntryList &list);
 
+    // jump in location history
+    void goBack();
+    void goForward();
+
 private Q_SLOTS:
     void toggleShowMenuBar(bool showMessage = true);
     void toggleShowStatusBar();
@@ -226,6 +228,8 @@ Q_SIGNALS:
     void statusBarToggled();
     void tabBarToggled();
     void unhandledShortcutOverride(QEvent *e);
+    void backButtonEnabled(bool enabled);
+    void forwardButtonEnabled(bool enabled);
 
 public:
     void openUrl(const QString &name = QString());
@@ -468,7 +472,11 @@ public Q_SLOTS:
      * \param text translated text (i18n()) to use in addition to icon
      * \return created toolview on success, otherwise NULL
      */
-    QWidget *createToolView(KTextEditor::Plugin *plugin, const QString &identifier, KTextEditor::MainWindow::ToolViewPosition pos, const QIcon &icon, const QString &text);
+    QWidget *createToolView(KTextEditor::Plugin *plugin,
+                            const QString &identifier,
+                            KTextEditor::MainWindow::ToolViewPosition pos,
+                            const QIcon &icon,
+                            const QString &text);
 
     /**
      * Move the toolview \p widget to position \p pos.
@@ -513,6 +521,11 @@ public Q_SLOTS:
      */
     QObject *pluginView(const QString &name);
 
+    /**
+     * Add a jump location for jumping back and forth between history
+     */
+    void addJump(const QUrl &url, KTextEditor::Cursor);
+
 private Q_SLOTS:
     void slotUpdateBottomViewBar();
 
@@ -537,16 +550,6 @@ private:
      * stacked widget containing the central area, aka view manager, quickopen, ...
      */
     QStackedWidget *m_mainStackedWidget = nullptr;
-
-    /**
-     * quick open to fast switch documents
-     */
-    KateQuickOpen *m_quickOpen = nullptr;
-
-    /**
-     * quick command bar to quickly trigger any action
-     */
-    KateCommandBar* m_commandBar = nullptr;
 
     /**
      * keeps track of views
@@ -574,6 +577,16 @@ private:
 
     QWidget *m_bottomViewBarContainer = nullptr;
     KateContainerStackedLayout *m_bottomContainerStack = nullptr;
+
+    QVector<QString> m_lastUsedCmdBarActions;
+
+    struct Location {
+        QUrl url;
+        KTextEditor::Cursor cursor;
+    };
+
+    QVector<Location> m_locations;
+    int currentLocation = 0;
 
     class BarState
     {
@@ -606,6 +619,26 @@ private:
     };
     QHash<KTextEditor::View *, BarState> m_bottomViewBarMapping;
 
+    /**
+     * generic output tool view
+     */
+    QWidget *m_toolViewOutput = nullptr;
+
+    /**
+     * output widget contained in above tool view
+     */
+    KateOutputView *m_outputView = nullptr;
+
+public:
+    /**
+     * Accessor for unique output view per main window.
+     * @return our output view, will always exist!
+     */
+    KateOutputView *outputView()
+    {
+        return m_outputView;
+    }
+
 public:
     static void unsetModifiedOnDiscDialogIfIf(KateMwModOnHdDialog *diag)
     {
@@ -628,7 +661,6 @@ public Q_SLOTS:
 protected:
     bool event(QEvent *e) override;
     void mousePressEvent(QMouseEvent *e) override;
-    void resizeEvent(QResizeEvent *event) override;
 };
 
 #endif

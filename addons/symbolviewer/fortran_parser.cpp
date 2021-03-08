@@ -15,8 +15,9 @@
 
 void KatePluginSymbolViewerView::parseFortranSymbols(void)
 {
-    if (!m_mainWindow->activeView())
+    if (!m_mainWindow->activeView()) {
         return;
+    }
 
     QString currline;
     QString subrStr(QStringLiteral("subroutine "));
@@ -59,8 +60,9 @@ void KatePluginSymbolViewerView::parseFortranSymbols(void)
         lastFuncNode = funcNode;
         lastModNode = modNode;
         m_symbols->setRootIsDecorated(1);
-    } else
+    } else {
         m_symbols->setRootIsDecorated(0);
+    }
 
     KTextEditor::Document *kDoc = m_mainWindow->activeView()->document();
 
@@ -72,10 +74,12 @@ void KatePluginSymbolViewerView::parseFortranSymbols(void)
         currline = currline.toLower();
         bool comment = false;
         // kdDebug(13000)<<currline<<endl;
-        if (currline.isEmpty())
+        if (currline.isEmpty()) {
             continue;
-        if (currline.at(0) == QLatin1Char('!') || currline.at(0) == QLatin1Char('c'))
+        }
+        if (currline.at(0) == QLatin1Char('!') || currline.at(0) == QLatin1Char('c')) {
             comment = true;
+        }
         // block=0;
 
         mainprog = false;
@@ -92,19 +96,22 @@ void KatePluginSymbolViewerView::parseFortranSymbols(void)
                 stripped.clear();
             }
             // Functions
-            else if ((((currline.startsWith(QLatin1String("real")) || currline.startsWith(QLatin1String("double")) || currline.startsWith(QLatin1String("integer")) || currline.startsWith(QLatin1String("character"))) ||
-                       currline.startsWith(QLatin1String("logical")) || currline.startsWith(QLatin1String("pure")) || currline.startsWith(QLatin1String("elemental")) || currline.startsWith(QLatin1String("recursive")) ||
-                       currline.startsWith(QLatin1String("type"))) &&
-                      currline.indexOf(funcStr) > 0) ||
-                     currline.startsWith(funcStr)) {
+            else if ((((currline.startsWith(QLatin1String("real")) || currline.startsWith(QLatin1String("double"))
+                        || currline.startsWith(QLatin1String("integer")) || currline.startsWith(QLatin1String("character")))
+                       || currline.startsWith(QLatin1String("logical")) || currline.startsWith(QLatin1String("pure"))
+                       || currline.startsWith(QLatin1String("elemental")) || currline.startsWith(QLatin1String("recursive"))
+                       || currline.startsWith(QLatin1String("type")))
+                      && currline.indexOf(funcStr) > 0)
+                     || currline.startsWith(funcStr)) {
                 block = 3;
                 stripped.clear();
             }
 
             // Subroutines
             if (block == 1) {
-                if (currline.startsWith(QLatin1String("program ")))
+                if (currline.startsWith(QLatin1String("program "))) {
                     mainprog = true;
+                }
                 if (m_macro->isChecked()) // not really a macro, but a subroutines
                 {
                     stripped += currline.rightRef(currline.length());
@@ -126,14 +133,16 @@ void KatePluginSymbolViewerView::parseFortranSymbols(void)
 
                     if ((paro == parc || mainprog) && stripped.endsWith(QLatin1Char('&'), Qt::CaseInsensitive) == false) {
                         stripped.remove(QLatin1Char('&'));
-                        if (mainprog && stripped.indexOf(QLatin1Char('(')) < 0 && stripped.indexOf(QLatin1Char(')')) < 0)
+                        if (mainprog && stripped.indexOf(QLatin1Char('(')) < 0 && stripped.indexOf(QLatin1Char(')')) < 0) {
                             stripped.prepend(QLatin1String("Main: "));
+                        }
                         if (stripped.indexOf(QLatin1Char('=')) == -1) {
                             if (m_treeOn->isChecked()) {
                                 node = new QTreeWidgetItem(subrNode, lastSubrNode);
                                 lastSubrNode = node;
-                            } else
+                            } else {
                                 node = new QTreeWidgetItem(m_symbols);
+                            }
                             node->setText(0, stripped);
                             node->setIcon(0, QIcon(subr));
                             node->setText(1, QString::number(i, 10));
@@ -165,8 +174,9 @@ void KatePluginSymbolViewerView::parseFortranSymbols(void)
                         if (m_treeOn->isChecked()) {
                             node = new QTreeWidgetItem(modNode, lastModNode);
                             lastModNode = node;
-                        } else
+                        } else {
                             node = new QTreeWidgetItem(m_symbols);
+                        }
                         node->setText(0, stripped);
                         node->setIcon(0, QIcon(mod));
                         node->setText(1, QString::number(i, 10));
@@ -200,8 +210,9 @@ void KatePluginSymbolViewerView::parseFortranSymbols(void)
                         if (m_treeOn->isChecked()) {
                             node = new QTreeWidgetItem(funcNode, lastFuncNode);
                             lastFuncNode = node;
-                        } else
+                        } else {
                             node = new QTreeWidgetItem(m_symbols);
+                        }
                         node->setText(0, stripped);
                         node->setIcon(0, QIcon(func));
                         node->setText(1, QString::number(i, 10));
