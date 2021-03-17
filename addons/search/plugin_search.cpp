@@ -1086,8 +1086,8 @@ void KatePluginSearchView::startSearch()
         for (const auto doc : docs) {
             // match project file's list toLocalFile()
             int index = files.indexOf(doc->url().toLocalFile());
+            openList << doc;
             if (index != -1) {
-                openList << doc;
                 files.removeAt(index);
             }
         }
