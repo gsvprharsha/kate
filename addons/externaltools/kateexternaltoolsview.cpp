@@ -67,7 +67,7 @@ void KateExternalToolsMenuAction::reload()
     for (auto tool : m_plugin->tools()) {
         if (tool->hasexec) {
             auto a = new QAction(tool->translatedName().replace(QLatin1Char('&'), QLatin1String("&&")), this);
-            a->setIcon(QIcon::fromTheme(tool->icon));
+            a->setIcon(QIcon::fromTheme(tool->icon, QIcon::fromTheme(QStringLiteral("tool-text"))));
             a->setData(QVariant::fromValue(tool));
 
             connect(a, &QAction::triggered, [this, a]() {

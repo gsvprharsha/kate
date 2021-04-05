@@ -17,7 +17,6 @@
 #include <KConfig>
 #include <KConfigGroup>
 #include <KIconButton>
-#include <KIconLoader>
 #include <KMimeTypeChooser>
 #include <KSharedConfig>
 #include <KXMLGUIFactory>
@@ -56,12 +55,9 @@ KateExternalTool *toolForItem(QStandardItem *item)
     return item ? reinterpret_cast<KateExternalTool *>(item->data(ToolRole).value<quintptr>()) : nullptr;
 }
 
-QIcon blankIcon()
+QIcon defaultIcon()
 {
-    QPixmap pm(KIconLoader::SizeSmall, KIconLoader::SizeSmall);
-    pm.fill();
-    pm.setMask(pm.createHeuristicMask());
-    return QIcon(pm);
+    return QIcon::fromTheme(QStringLiteral("tool-text"));
 }
 
 //! Helper that ensures that tool->actionName is unique
@@ -311,7 +307,7 @@ void KateExternalToolsConfigWidget::reset()
     const auto tools = m_plugin->tools();
     for (auto tool : tools) {
         auto clone = new KateExternalTool(*tool);
-        auto item = newToolItem(clone->icon.isEmpty() ? blankIcon() : QIcon::fromTheme(clone->icon), clone);
+        auto item = newToolItem(clone->icon.isEmpty() ? defaultIcon() : QIcon::fromTheme(clone->icon), clone);
         auto category = clone->category.isEmpty() ? m_noCategory : addCategory(clone->category);
         category->appendRow(item);
     }
@@ -450,7 +446,7 @@ void KateExternalToolsConfigWidget::addNewTool(KateExternalTool *tool)
     makeActionNameUnique(tool, tools);
     makeEditorCommandUnique(tool, tools);
 
-    auto item = newToolItem(tool->icon.isEmpty() ? blankIcon() : QIcon::fromTheme(tool->icon), tool);
+    auto item = newToolItem(tool->icon.isEmpty() ? defaultIcon() : QIcon::fromTheme(tool->icon), tool);
     auto category = addCategory(tool->translatedCategory());
     category->appendRow(item);
     lbTools->setCurrentIndex(item->index());
@@ -560,7 +556,7 @@ void KateExternalToolsConfigWidget::slotEdit()
     if (editTool(tool)) {
         // renew the icon and name
         item->setText(tool->name);
-        item->setIcon(tool->icon.isEmpty() ? blankIcon() : QIcon::fromTheme(tool->icon));
+        item->setIcon(tool->icon.isEmpty() ? defaultIcon() : QIcon::fromTheme(tool->icon));
 
         Q_EMIT changed();
         m_changed = true;
