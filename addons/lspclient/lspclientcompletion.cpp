@@ -13,6 +13,9 @@
 #include <KTextEditor/Document>
 #include <KTextEditor/View>
 
+#include <KConfigGroup>
+#include <KSharedConfig>
+
 #include <QIcon>
 #include <QUrl>
 
@@ -230,6 +233,37 @@ public:
         }
 
         return QVariant();
+    }
+
+    static bool removeTailOnComplete()
+    {
+        KSharedConfigPtr config = KSharedConfig::openConfig();
+        KConfigGroup cg(config, QStringLiteral("KTextEditor View"));
+        return cg.readEntry(QStringLiteral("Word Completion Remove Tail"), false);
+    }
+
+    KTextEditor::Range completionRange(KTextEditor::View *view, const KTextEditor::Cursor &position) override
+    {
+        if (removeTailOnComplete()) {
+            return CodeCompletionModelControllerInterface::completionRange(view, position);
+        }
+
+        // Return the range containing the word left of the cursor
+        const int line = position.line();
+        int col = position.column();
+
+        KTextEditor::Document *doc = view->document();
+        while (col > 0) {
+            const QChar c = (doc->characterAt(KTextEditor::Cursor(line, col - 1)));
+            if (c.isLetterOrNumber() || c.isMark() || c == QLatin1Char('_')) {
+                --col;
+                continue;
+            }
+
+            break;
+        }
+
+        return KTextEditor::Range(KTextEditor::Cursor(line, col), position);
     }
 
     bool shouldStartCompletion(KTextEditor::View *view, const QString &insertedText, bool userInsertion, const KTextEditor::Cursor &position) override
