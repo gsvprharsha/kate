@@ -63,6 +63,11 @@ public:
      */
     void addDirectory(const QModelIndex &idx, const QString &name);
 
+    /**
+     * Open project terminal at location dirPath
+     */
+    void openTerminal(const QString &dirPath);
+
 private Q_SLOTS:
     /**
      * item got clicked, do stuff, like open document

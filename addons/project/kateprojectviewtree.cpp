@@ -166,6 +166,11 @@ void KateProjectViewTree::addDirectory(const QModelIndex &idx, const QString &na
     item->sortChildren(0);
 }
 
+void KateProjectViewTree::openTerminal(const QString &dirPath)
+{
+    m_pluginView->openTerminal(dirPath, m_project);
+}
+
 void KateProjectViewTree::slotClicked(const QModelIndex &index)
 {
     /**
