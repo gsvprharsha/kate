@@ -361,10 +361,8 @@ void KateConfigDialog::slotApply()
 
         m_mainWindow->saveOptions();
 
-        // save plugin config !!
-        KateSessionManager *sessionmanager = KateApp::self()->sessionManager();
-        KConfig *sessionConfig = sessionmanager->activeSession()->config();
-        KateApp::self()->pluginManager()->writeConfig(sessionConfig);
+        // remember which plugins shall be loaded
+        KateApp::self()->pluginManager()->writeConfig();
 
 #ifdef WITH_KUSERFEEDBACK
         // set current active mode + write back the config for future starts

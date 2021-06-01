@@ -17,6 +17,7 @@
 #include <KConfigGroup>
 #include <KPluginFactory>
 #include <KPluginLoader>
+#include <KSharedConfig>
 
 #include <QFile>
 #include <QFileInfo>
@@ -99,28 +100,29 @@ void KatePluginManager::setupPluginList()
     for (auto &pluginInfo : m_pluginList) {
         m_name2Plugin[pluginInfo.saveName()] = &pluginInfo;
     }
+
+    // query config to get real plugin load state from global config
+    const KConfigGroup cg(KSharedConfig::openConfig(), QStringLiteral("Kate Plugins"));
+    for (auto &pluginInfo : m_pluginList) {
+        pluginInfo.load = cg.readEntry(pluginInfo.saveName(), pluginInfo.defaultLoad);
+    }
 }
 
-void KatePluginManager::loadConfig(KConfig *config)
+void KatePluginManager::writeConfig() const
 {
-    // first: unload the plugins
+    // write plugin load config to global config
+    KConfigGroup cg(KSharedConfig::openConfig(), QStringLiteral("Kate Plugins"));
+    for (auto &plugin : m_pluginList) {
+        cg.writeEntry(plugin.saveName(), plugin.load);
+    }
+}
+
+void KatePluginManager::loadSessionConfig(KConfig *config)
+{
+    // first: unload the plugins to get clean state
     unloadAllPlugins();
 
-    /**
-     * ask config object
-     */
-    if (config) {
-        KConfigGroup cg = KConfigGroup(config, QStringLiteral("Kate Plugins"));
-
-        // disable all plugin if no config, beside the ones marked as default load
-        for (auto &pluginInfo : m_pluginList) {
-            pluginInfo.load = cg.readEntry(pluginInfo.saveName(), pluginInfo.defaultLoad);
-        }
-    }
-
-    /**
-     * load plugins
-     */
+    // then load again all activated ones, that will trigger session loading
     for (auto &pluginInfo : m_pluginList) {
         if (pluginInfo.load) {
             /**
@@ -131,26 +133,19 @@ void KatePluginManager::loadConfig(KConfig *config)
 
             // restore config
             if (auto interface = qobject_cast<KTextEditor::SessionConfigInterface *>(pluginInfo.plugin)) {
-                KConfigGroup group(config, QStringLiteral("Plugin:%1:").arg(pluginInfo.saveName()));
+                const KConfigGroup group(config, QStringLiteral("Plugin:%1:").arg(pluginInfo.saveName()));
                 interface->readSessionConfig(group);
             }
         }
     }
 }
 
-void KatePluginManager::writeConfig(KConfig *config)
+void KatePluginManager::writeSessionConfig(KConfig *config) const
 {
-    Q_ASSERT(config);
-
-    KConfigGroup cg = KConfigGroup(config, QStringLiteral("Kate Plugins"));
-    for (const KatePluginInfo &plugin : qAsConst(m_pluginList)) {
-        QString saveName = plugin.saveName();
-
-        cg.writeEntry(saveName, plugin.load);
-
-        // save config
+    // write all plugin session config
+    for (const KatePluginInfo &plugin : m_pluginList) {
         if (auto interface = qobject_cast<KTextEditor::SessionConfigInterface *>(plugin.plugin)) {
-            KConfigGroup group(config, QStringLiteral("Plugin:%1:").arg(saveName));
+            KConfigGroup group(config, QStringLiteral("Plugin:%1:").arg(plugin.saveName()));
             interface->writeSessionConfig(group);
         }
     }

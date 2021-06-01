@@ -157,10 +157,8 @@ void KateSessionManager::loadSession(const KateSession::Ptr &session) const
     KConfig *sc = session->config();
     const bool loadDocs = !session->isAnonymous(); // do not load docs for new sessions
 
-    // if we have no session config object, try to load the default
-    // (anonymous/unnamed sessions)
-    // load plugin config + plugins
-    KateApp::self()->pluginManager()->loadConfig(sc);
+    // load session config for all plugins
+    KateApp::self()->pluginManager()->loadSessionConfig(sc);
 
     if (loadDocs) {
         KateApp::self()->documentManager()->restoreDocumentList(sc);
@@ -333,8 +331,8 @@ void KateSessionManager::saveSessionTo(KConfig *sc) const
         }
     }
 
-    // save plugin configs and which plugins to load
-    KateApp::self()->pluginManager()->writeConfig(sc);
+    // save plugin session configs
+    KateApp::self()->pluginManager()->writeSessionConfig(sc);
 
     // save document configs + which documents to load
     KateApp::self()->documentManager()->saveDocumentList(sc);

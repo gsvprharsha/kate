@@ -148,7 +148,7 @@ void KateApp::restoreKate()
     sessionManager()->activateSession(lastSession, false, false);
 
     // plugins
-    KateApp::self()->pluginManager()->loadConfig(sessionConfig);
+    KateApp::self()->pluginManager()->loadSessionConfig(sessionConfig);
 
     // restore the files we need
     m_docManager.restoreDocumentList(sessionConfig);

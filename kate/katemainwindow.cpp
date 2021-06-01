@@ -1123,8 +1123,8 @@ void KateMainWindow::saveGlobalProperties(KConfig *sessionConfig)
     KConfigGroup cg(sessionConfig, "General");
     cg.writeEntry("Last Session", KateApp::self()->sessionManager()->activeSession()->name());
 
-    // save plugin config !!
-    KateApp::self()->pluginManager()->writeConfig(sessionConfig);
+    // save plugin session config
+    KateApp::self()->pluginManager()->writeSessionConfig(sessionConfig);
 }
 
 void KateMainWindow::saveWindowConfig(const KConfigGroup &_config)

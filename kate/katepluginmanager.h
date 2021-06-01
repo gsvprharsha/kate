@@ -48,8 +48,26 @@ public:
     void enableAllPluginsGUI(KateMainWindow *win, KConfigBase *config = nullptr);
     void disableAllPluginsGUI(KateMainWindow *win);
 
-    void loadConfig(KConfig *);
-    void writeConfig(KConfig *);
+    /**
+     * Write global configuration about enabled plugins
+     */
+    void writeConfig() const;
+
+    /**
+     * Load session config of all enabled plugins.
+     * Will internally unload/load all plugins again to have a safe state
+     * and trigger initial plugin loading on application startup.
+     *
+     * @param sc session config to use
+     */
+    void loadSessionConfig(KConfig *sc);
+
+    /**
+     * Write session config of all enabled plugins.
+     *
+     * @param sc session config to use
+     */
+    void writeSessionConfig(KConfig *sc) const;
 
     bool loadPlugin(KatePluginInfo *item);
     void unloadPlugin(KatePluginInfo *item);
