@@ -264,10 +264,10 @@ public:
     {
         Q_UNUSED(it)
 
+        Q_EMIT waitForReset();
+
         qCInfo(LSPCLIENT) << "completion invoked" << m_server;
 
-        // maybe use WaitForReset ??
-        // but more complex and already looks good anyway
         auto handler = [this](const QList<LSPCompletionItem> & compl ) {
             beginResetModel();
             qCInfo(LSPCLIENT) << "adding completions " << compl .size();
@@ -312,8 +312,6 @@ public:
             endResetModel();
         };
 
-        beginResetModel();
-        m_matches.clear();
         auto document = view->document();
         if (m_server && document) {
             // the default range is determined based on a reasonable identifier (word)
@@ -329,8 +327,6 @@ public:
                 m_handleSig = m_server->signatureHelp(document->url(), {cursor.line(), cursor.column()}, this, sigHandler);
             }
         }
-        setRowCount(m_matches.size());
-        endResetModel();
     }
 
     /**
@@ -356,7 +352,6 @@ public:
         if (index.row() >= m_matches.size()) {
             return;
         }
-
         QChar next = peekNextChar(view->document(), word);
 
         QString matching;
