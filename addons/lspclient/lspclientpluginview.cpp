@@ -2303,6 +2303,7 @@ public:
         }
 
         if (m_plugin->m_semanticHighlighting) {
+            m_serverManager->update(doc, true);
             m_semHighlightingManager.doSemanticHighlighting(activeView);
         }
 
