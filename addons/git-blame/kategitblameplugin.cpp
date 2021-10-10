@@ -257,7 +257,7 @@ void KateGitBlamePluginView::startShowProcess(const QUrl &url, const QString &ha
     QDir dir{url.toLocalFile()};
     dir.cdUp();
 
-    setupGitProcess(m_showProc, dir.absolutePath(), {QStringLiteral("show"), hash});
+    setupGitProcess(m_showProc, dir.absolutePath(), {QStringLiteral("show"), hash, url.fileName()});
     m_showProc.start(QIODevice::ReadOnly);
 }
 
@@ -316,7 +316,7 @@ void KateGitBlamePluginView::showFinished(int exitCode, QProcess::ExitStatus exi
         return;
     }
     QStringList args = m_showProc.arguments();
-    if (args.size() != 2) {
+    if (args.size() != 3) {
         qWarning() << "Wrong number of parameters:" << args;
         return;
     }
