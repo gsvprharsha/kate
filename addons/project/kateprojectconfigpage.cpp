@@ -129,7 +129,7 @@ QString KateProjectConfigPage::fullName() const
 
 QIcon KateProjectConfigPage::icon() const
 {
-    return QIcon::fromTheme(QLatin1String("view-list-tree"));
+    return QIcon::fromTheme(QLatin1String("preferences-git"));
 }
 
 void KateProjectConfigPage::apply()
