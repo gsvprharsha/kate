@@ -2065,6 +2065,8 @@ void KatePluginSearchView::customResMenuRequested(const QPoint &pos)
         menu->addAction(exportMatches);
     }
 
+    QAction *clear = menu->addAction(i18n("Clear"));
+
     menu->popup(tree->viewport()->mapToGlobal(pos));
 
     connect(copyAll, &QAction::triggered, this, [this](bool) {
@@ -2075,6 +2077,10 @@ void KatePluginSearchView::customResMenuRequested(const QPoint &pos)
     });
     connect(exportMatches, &QAction::triggered, this, [this](bool) {
         showExportMatchesDialog();
+    });
+    connect(clear, &QAction::triggered, this, [this] {
+        m_curResults->matchModel.clear();
+        clearMarksAndRanges();
     });
 }
 
